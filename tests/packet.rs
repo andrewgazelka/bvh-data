@@ -77,5 +77,17 @@ fn test_build_bvh_with_local_packet() {
 
     // print it out
     let s = bvh.print();
-    println!("{}", s);
+
+    let expected = r#"
+Internal
+  Internal
+  Internal
+    Leaf(data_index: 0..4)
+    Leaf(data_index: 4..8)
+    Leaf(data_index: 8..12)
+    Leaf(data_index: 12..16)
+    "#
+    .trim();
+
+    assert_eq!(s, expected);
 }

@@ -8,6 +8,12 @@ impl<T, A: Allocator> Bvh<T, A> {
     pub fn print(&self) -> String {
         let mut output = String::new();
         self.print_helper(&mut output);
+
+        // trim last newline
+        if output.ends_with('\n') {
+            output.pop();
+        }
+
         output
     }
 
