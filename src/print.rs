@@ -20,7 +20,7 @@ impl<T, A: Allocator> Bvh<T, A> {
             let node = unsafe { self.nodes[context.idx as usize].assume_init_ref().get() };
 
             // leaf
-            if let Some(idx) = node.leaf_element_start_idx() {
+            if let Some(idx) = node.leaf_element_indices() {
                 output.push_str(&format!("{}Leaf(data_index: {})\n", indent, idx));
                 continue;
             }

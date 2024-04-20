@@ -23,6 +23,30 @@ impl DfsContext {
         }
     }
 
+    pub fn full_left(self) -> Self {
+        debug_assert!(
+            self.distance_to_leaf != 0,
+            "trying to go left on a leaf node"
+        );
+
+        Self {
+            idx: self.idx + self.distance_to_leaf as u32,
+            distance_to_leaf: 0,
+        }
+    }
+
+    pub fn full_right(self) -> Self {
+        debug_assert!(
+            self.distance_to_leaf != 0,
+            "trying to go right on a leaf node"
+        );
+
+        Self {
+            idx: self.idx + 2_u32.pow(u32::from(self.distance_to_leaf) + 1) - 2,
+            distance_to_leaf: 0,
+        }
+    }
+
     pub fn right(self) -> Self {
         debug_assert!(
             self.distance_to_leaf != 0,
@@ -188,5 +212,81 @@ mod tests {
         let right_right_right = right_right.right();
         assert_eq!(right_right_right.idx, 14);
         assert_eq!(right_right_right.distance_to_leaf, 0);
+    }
+
+    #[test]
+    fn test_full_left() {
+        let context = DfsContext {
+            idx: 0,
+            distance_to_leaf: 3,
+        };
+
+        let full_left = context.full_left();
+        assert_eq!(full_left.idx, 3);
+        assert_eq!(full_left.distance_to_leaf, 0);
+
+        let recursive_left = context.left().left().left();
+        assert_eq!(recursive_left.idx, 3);
+        assert_eq!(recursive_left.distance_to_leaf, 0);
+    }
+
+    #[test]
+    fn test_full_right() {
+        let context = DfsContext {
+            idx: 0,
+            distance_to_leaf: 3,
+        };
+
+        let full_right = context.full_right();
+        assert_eq!(full_right.idx, 14);
+        assert_eq!(full_right.distance_to_leaf, 0);
+
+        let recursive_right = context.right().right().right();
+        assert_eq!(recursive_right.idx, 14);
+        assert_eq!(recursive_right.distance_to_leaf, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_full_right_depth_0() {
+        let context = DfsContext {
+            idx: 0,
+            distance_to_leaf: 0,
+        };
+
+        // Full right on a leaf node should panic
+        context.full_right();
+    }
+
+    #[test]
+    fn test_full_right_depth_1() {
+        let context = DfsContext {
+            idx: 0,
+            distance_to_leaf: 1,
+        };
+
+        let full_right = context.full_right();
+        assert_eq!(full_right.idx, 2);
+        assert_eq!(full_right.distance_to_leaf, 0);
+
+        let recursive_right = context.right();
+        assert_eq!(recursive_right.idx, 2);
+        assert_eq!(recursive_right.distance_to_leaf, 0);
+    }
+
+    #[test]
+    fn test_full_right_depth_2() {
+        let context = DfsContext {
+            idx: 0,
+            distance_to_leaf: 2,
+        };
+
+        let full_right = context.full_right();
+        assert_eq!(full_right.idx, 6);
+        assert_eq!(full_right.distance_to_leaf, 0);
+
+        let recursive_right = context.right().right();
+        assert_eq!(recursive_right.idx, 6);
+        assert_eq!(recursive_right.distance_to_leaf, 0);
     }
 }

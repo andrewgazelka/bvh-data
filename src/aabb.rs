@@ -10,8 +10,8 @@ use crate::Point;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Aabb {
     // 64 bit
-    min: glam::I16Vec2, // 32 bit
-    max: glam::I16Vec2, // 32 bit
+    pub min: glam::I16Vec2, // 32 bit
+    pub max: glam::I16Vec2, // 32 bit
 }
 
 impl Aabb {
@@ -21,6 +21,13 @@ impl Aabb {
 
     pub fn is_unit(self) -> bool {
         self.min == self.max
+    }
+
+    pub fn collides(self, other: Self) -> bool {
+        self.min.x < other.max.x
+            && self.max.x > other.min.x
+            && self.min.y < other.max.y
+            && self.max.y > other.min.y
     }
 
     pub fn enclosing_aabb<I: Point>(elems: &[I]) -> Self {

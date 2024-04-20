@@ -16,6 +16,7 @@ mod aabb;
 mod dfs;
 mod node;
 mod print;
+mod query;
 mod utils;
 
 pub struct Bvh<T, A: Allocator = Global> {
@@ -77,19 +78,12 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
         let context = DfsContext::new(depth);
 
         let mut bvh = Self {
-            nodes: Box::new_uninit_slice_in(total_nodes_len + 1, alloc.clone()),
+            nodes: Box::new_uninit_slice_in(total_nodes_len, alloc.clone()),
             data: Vec::with_capacity_in(size_hint, alloc),
             depth,
         };
 
         build_bvh_helper(&mut bvh, &mut input, context);
-
-        // so we can handle the edge case where we are getting the last elem
-        let data_len = bvh.data.len();
-        bvh.nodes
-            .last_mut()
-            .unwrap()
-            .write(Cell::new(Node::leaf(data_len as u32)));
 
         bvh
     }
@@ -136,12 +130,14 @@ fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
     let aabb = Aabb::enclosing_aabb(elements);
 
     if aabb.is_unit() || len == 1 {
-        let node = Node::leaf(build.data.len() as u32);
+        let start_index = build.data.len();
 
         for elem in elements {
             build.data.extend_from_slice(elem.data());
         }
 
+        let end_exclusive = build.data.len();
+        let node = Node::leaf(start_index as u32, end_exclusive as u32);
         build.set_node(context.idx as usize, node);
 
         return;
