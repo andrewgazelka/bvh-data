@@ -15,19 +15,36 @@ pub struct Aabb {
 }
 
 impl Aabb {
+    #[must_use]
     pub const fn new(min: glam::I16Vec2, max: glam::I16Vec2) -> Self {
         Self { min, max }
     }
 
-    pub fn is_unit(self) -> bool {
-        self.min == self.max
+    // todo: test
+    #[must_use]
+    pub const fn contains_point(self, point: glam::I16Vec2) -> bool {
+        self.min.x <= point.x
+            && self.max.x >= point.x
+            && self.min.y <= point.y
+            && self.max.y >= point.y
     }
 
-    pub fn collides(self, other: Self) -> bool {
-        self.min.x < other.max.x
-            && self.max.x > other.min.x
-            && self.min.y < other.max.y
-            && self.max.y > other.min.y
+    #[must_use]
+    pub fn to_unit(self) -> Option<glam::I16Vec2> {
+        if self.min == self.max {
+            Some(self.min)
+        } else {
+            None
+        }
+    }
+
+    // todo: test
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
+        self.min.x <= other.max.x
+            && self.max.x >= other.min.x
+            && self.min.y <= other.max.y
+            && self.max.y >= other.min.y
     }
 
     pub fn enclosing_aabb<I: Point>(elems: &[I]) -> Self {
@@ -44,6 +61,7 @@ impl Aabb {
         Self::new(min, max)
     }
 
+    #[must_use]
     pub const fn lens(self) -> [u16; 2] {
         let lx = self.max.x.abs_diff(self.min.x);
         let ly = self.max.y.abs_diff(self.min.y);

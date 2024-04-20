@@ -1,8 +1,8 @@
-use crate::dfs::context::DfsContext;
-use crate::Bvh;
 use std::alloc::Allocator;
-
 use std::collections::VecDeque;
+
+use crate::node::NodeExpanded;
+use crate::Bvh;
 
 impl<T, A: Allocator> Bvh<T, A> {
     pub fn print(&self) -> String {
@@ -25,19 +25,20 @@ impl<T, A: Allocator> Bvh<T, A> {
             let indent = "  ".repeat(depth);
             let node = unsafe { self.nodes[context.idx as usize].assume_init_ref().get() };
 
-            // leaf
-            if let Some(idx) = node.leaf_element_indices() {
-                output.push_str(&format!("{}Leaf(data_index: {})\n", indent, idx));
-                continue;
+            match node.into_expanded() {
+                NodeExpanded::Aabb(aabb) => {
+                    output.push_str(&format!("{}Internal({:?})\n", indent, aabb));
+
+                    let left = context.left();
+                    let right = context.right();
+
+                    queue.push_back((left, depth + 1));
+                    queue.push_back((right, depth + 1));
+                }
+                NodeExpanded::Leaf(leaf) => {
+                    output.push_str(&format!("{}Leaf({})\n", indent, leaf));
+                }
             }
-
-            output.push_str(&format!("{}Internal\n", indent));
-
-            let left = context.left();
-            let right = context.right();
-
-            queue.push_back((left, depth + 1));
-            queue.push_back((right, depth + 1));
         }
     }
 }

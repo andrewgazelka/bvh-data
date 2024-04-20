@@ -7,6 +7,7 @@ readme = "README.md"
 publish = false
 
 [dependencies]
+arrayvec = "0.7.4"
 glam = "0.27.0"
 itertools = "0.12.1"
 
@@ -19,3 +20,6 @@ pedantic = "deny"
 perf = "deny"
 style = "deny"
 suspicious = "deny"
+
+[dev-dependencies]
+fastrand = "2.0.2"

@@ -1,3 +1,4 @@
+// todo: should we pack?
 #[derive(Copy, Clone)]
 pub struct DfsContext {
     pub idx: u32,
@@ -23,6 +24,7 @@ impl DfsContext {
         }
     }
 
+    #[allow(unused)]
     pub fn full_left(self) -> Self {
         debug_assert!(
             self.distance_to_leaf != 0,
@@ -35,6 +37,7 @@ impl DfsContext {
         }
     }
 
+    #[allow(unused)]
     pub fn full_right(self) -> Self {
         debug_assert!(
             self.distance_to_leaf != 0,

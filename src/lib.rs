@@ -1,10 +1,11 @@
+#![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(allocator_api)]
 
-use crate::aabb::Aabb;
+pub use crate::aabb::Aabb;
 use crate::dfs::context::DfsContext;
 use crate::dfs::depth_for_leaf_node_count;
-use crate::node::Node;
+use crate::node::{Node, NodeExpanded};
 use std::alloc::{Allocator, Global};
 use std::cell::Cell;
 use std::mem::MaybeUninit;
@@ -13,6 +14,7 @@ use crate::sealed::PointWithData;
 use crate::utils::partition_index_by_largest_axis;
 
 mod aabb;
+
 mod dfs;
 mod node;
 mod print;
@@ -110,6 +112,33 @@ impl<T, A: Allocator> Bvh<T, A> {
         let ptr = &*ptr;
         ptr.get()
     }
+
+    unsafe fn get_opt_node(&self, idx: usize) -> Option<Node> {
+        let ptr = self.nodes.get(idx)?.as_ptr();
+        let ptr = &*ptr;
+        Some(ptr.get())
+    }
+
+    // todo: this is impl pretty inefficiently. I feel there is an O(1) approach but I cannot think of it right now
+    pub fn get_next_data_for_idx(&self, idx: u32) -> usize {
+        let mut idx_on = (idx + 1) as usize;
+
+        loop {
+            let node = unsafe { self.get_opt_node(idx_on) };
+
+            let Some(node) = node else {
+                return self.data.len();
+            };
+
+            let expanded = node.into_expanded();
+
+            if let NodeExpanded::Leaf(leaf) = expanded {
+                return leaf.start as usize;
+            }
+
+            idx_on += 1;
+        }
+    }
 }
 
 fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
@@ -129,19 +158,20 @@ fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
 
     let aabb = Aabb::enclosing_aabb(elements);
 
-    if aabb.is_unit() || len == 1 {
+    if let Some(point) = aabb.to_unit() {
         let start_index = build.data.len();
 
         for elem in elements {
             build.data.extend_from_slice(elem.data());
         }
 
-        let end_exclusive = build.data.len();
-        let node = Node::leaf(start_index as u32, end_exclusive as u32);
+        let node = Node::leaf(point, start_index as u32);
         build.set_node(context.idx as usize, node);
 
         return;
     }
+
+    build.set_node(context.idx as usize, Node::aabb(aabb));
 
     let left_context = context.left();
     let right_context = context.right();
