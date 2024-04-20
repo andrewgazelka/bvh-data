@@ -1,4 +1,5 @@
 use crate::aabb::Aabb;
+use crate::Bvh;
 
 // todo: does this make the most sense to do? could also look at incorrect min, max where they are going the wrong
 // way in order to store data

@@ -82,14 +82,14 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
             depth,
         };
 
-        build_bvh_helper(&mut bvh, 0, &mut input, context);
+        build_bvh_helper(&mut bvh, &mut input, context);
 
         // so we can handle the edge case where we are getting the last elem
-        let elements_len = bvh.data.len();
+        let data_len = bvh.data.len();
         bvh.nodes
             .last_mut()
             .unwrap()
-            .write(Cell::new(Node::leaf(elements_len as u32)));
+            .write(Cell::new(Node::leaf(data_len as u32)));
 
         bvh
     }
@@ -110,11 +110,16 @@ impl<T, A: Allocator> Bvh<T, A> {
     pub fn elements(&self) -> &[T] {
         &self.data
     }
+
+    unsafe fn get_node(&self, idx: usize) -> Node {
+        let ptr = self.nodes[idx].as_ptr();
+        let ptr = &*ptr;
+        ptr.get()
+    }
 }
 
 fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
     build: &mut Bvh<T::Unit, A>,
-    elements_start_idx: u32, // todo: remove could just use a dif repr of a slice
     elements: &mut [T],
     context: DfsContext,
 ) where
@@ -131,12 +136,11 @@ fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
     let aabb = Aabb::enclosing_aabb(elements);
 
     if aabb.is_unit() || len == 1 {
-        let insert_elements = &mut build.data;
-        for elem in elements {
-            insert_elements.extend_from_slice(elem.data());
-        }
+        let node = Node::leaf(build.data.len() as u32);
 
-        let node = Node::leaf(elements_start_idx);
+        for elem in elements {
+            build.data.extend_from_slice(elem.data());
+        }
 
         build.set_node(context.idx as usize, node);
 
@@ -148,11 +152,6 @@ fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
 
     let (left, right) = partition_index_by_largest_axis(elements, aabb);
 
-    build_bvh_helper(build, elements_start_idx, left, left_context);
-    build_bvh_helper(
-        build,
-        elements_start_idx + left.len() as u32,
-        right,
-        right_context,
-    );
+    build_bvh_helper(build, left, left_context);
+    build_bvh_helper(build, right, right_context);
 }
