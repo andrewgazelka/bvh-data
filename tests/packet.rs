@@ -1,32 +1,32 @@
 use bvh::{Bvh, Data, Point};
 use glam::I16Vec2;
 
-struct LocalPacket<'a> {
-    origin: I16Vec2,
-    data: &'a [u8],
+struct ChunkWithPackets<'a> {
+    location: I16Vec2,
+    packets_data: &'a [u8],
 }
 
-impl<'a> Point for LocalPacket<'a> {
+impl<'a> Point for ChunkWithPackets<'a> {
     // todo: test returning val vs ref
     fn point(&self) -> I16Vec2 {
-        self.origin
+        self.location
     }
 }
 
-impl<'a> Data<'a> for LocalPacket<'a> {
+impl<'a> Data<'a> for ChunkWithPackets<'a> {
     type Unit = u8;
 
     fn data(&self) -> &'a [u8] {
-        self.data
+        self.packets_data
     }
 }
 
 #[test]
 fn test_local_packet() {
     let data = [1, 2, 3, 4];
-    let packet = LocalPacket {
-        origin: I16Vec2::new(1, 2),
-        data: &data,
+    let packet = ChunkWithPackets {
+        location: I16Vec2::new(1, 2),
+        packets_data: &data,
     };
 
     assert_eq!(packet.point(), I16Vec2::new(1, 2));
@@ -41,21 +41,21 @@ fn test_build_bvh_with_local_packet() {
     let data4 = [13, 14, 15, 16];
 
     let mut input = vec![
-        LocalPacket {
-            origin: I16Vec2::new(0, 0),
-            data: &data1,
+        ChunkWithPackets {
+            location: I16Vec2::new(0, 0),
+            packets_data: &data1,
         },
-        LocalPacket {
-            origin: I16Vec2::new(1, 1),
-            data: &data2,
+        ChunkWithPackets {
+            location: I16Vec2::new(1, 1),
+            packets_data: &data2,
         },
-        LocalPacket {
-            origin: I16Vec2::new(2, 2),
-            data: &data3,
+        ChunkWithPackets {
+            location: I16Vec2::new(2, 2),
+            packets_data: &data3,
         },
-        LocalPacket {
-            origin: I16Vec2::new(3, 3),
-            data: &data4,
+        ChunkWithPackets {
+            location: I16Vec2::new(3, 3),
+            packets_data: &data4,
         },
     ];
 
