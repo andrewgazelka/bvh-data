@@ -27,6 +27,16 @@ pub struct Bvh<T, A: Allocator = Global> {
     depth: u8,
 }
 
+impl<T, A: Allocator + Default> Default for Bvh<T, A> {
+    fn default() -> Self {
+        Self {
+            nodes: Box::new_uninit_slice_in(0, A::default()),
+            data: Vec::with_capacity_in(0, A::default()),
+            depth: 0,
+        }
+    }
+}
+
 // broadcast buffer &[1,2,3,4,5,6]
 // packet info
 
