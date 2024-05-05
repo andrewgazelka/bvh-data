@@ -13,10 +13,10 @@ impl<'a> Point for ChunkWithPackets<'a> {
     }
 }
 
-impl<'a> Data<'a> for ChunkWithPackets<'a> {
+impl<'a> Data for ChunkWithPackets<'a> {
     type Unit = u8;
 
-    fn data(&self) -> &'a [u8] {
+    fn data(&self) -> &[u8] {
         self.packets_data
     }
 }
@@ -78,7 +78,7 @@ fn test_build_bvh_with_local_packet() {
     // print it out
     let s = bvh.print();
 
-    let expected = r#"
+    let expected = r"
 Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(3, 3) })
   Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
   Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(3, 3) })
@@ -86,7 +86,7 @@ Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(3, 3) })
     Leaf([1, 1] -> 4)
     Leaf([2, 2] -> 8)
     Leaf([3, 3] -> 12)
-    "#
+    "
     .trim();
 
     assert_eq!(s, expected);

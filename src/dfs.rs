@@ -1,5 +1,6 @@
 pub mod context;
 
+#[allow(clippy::cast_possible_truncation)]
 pub const fn depth_for_leaf_node_count(leaf_node_count: u32) -> u8 {
     leaf_node_count.trailing_zeros() as u8
 }

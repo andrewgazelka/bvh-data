@@ -1,7 +1,7 @@
 use std::alloc::Allocator;
 use std::collections::VecDeque;
 
-use crate::node::NodeExpanded;
+use crate::node::Expanded;
 use crate::Bvh;
 
 impl<T, A: Allocator> Bvh<T, A> {
@@ -26,7 +26,7 @@ impl<T, A: Allocator> Bvh<T, A> {
             let node = unsafe { self.nodes[context.idx as usize].assume_init_ref().get() };
 
             match node.into_expanded() {
-                NodeExpanded::Aabb(aabb) => {
+                Expanded::Aabb(aabb) => {
                     output.push_str(&format!("{}Internal({:?})\n", indent, aabb));
 
                     let left = context.left();
@@ -35,7 +35,7 @@ impl<T, A: Allocator> Bvh<T, A> {
                     queue.push_back((left, depth + 1));
                     queue.push_back((right, depth + 1));
                 }
-                NodeExpanded::Leaf(leaf) => {
+                Expanded::Leaf(leaf) => {
                     output.push_str(&format!("{}Leaf({})\n", indent, leaf));
                 }
             }

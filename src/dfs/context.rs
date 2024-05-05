@@ -1,11 +1,11 @@
 // todo: should we pack?
 #[derive(Copy, Clone)]
-pub struct DfsContext {
+pub struct Dfs {
     pub idx: u32,
     pub distance_to_leaf: u8,
 }
 
-impl DfsContext {
+impl Dfs {
     pub const fn new(depth: u8) -> Self {
         Self {
             idx: 0,
@@ -32,7 +32,7 @@ impl DfsContext {
         );
 
         Self {
-            idx: self.idx + self.distance_to_leaf as u32,
+            idx: self.idx + u32::from(self.distance_to_leaf),
             distance_to_leaf: 0,
         }
     }
@@ -72,7 +72,7 @@ mod tests {
          * Tree (depth 0):
          *   0
          */
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 0,
         };
@@ -89,7 +89,7 @@ mod tests {
          *    / \
          *   1   2
          */
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 1,
         };
@@ -113,7 +113,7 @@ mod tests {
          *    / \   / \
          *   2   3 5   6
          */
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 2,
         };
@@ -144,6 +144,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_depth_3() {
         /*
          * Tree (depth 3):
@@ -155,7 +156,7 @@ mod tests {
          *    / \  / \ / \  / \
          *   3  4 6  7 10 11 13 14
          */
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 3,
         };
@@ -219,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_full_left() {
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 3,
         };
@@ -235,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_full_right() {
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 3,
         };
@@ -250,9 +251,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "trying to go right on a leaf node")]
     fn test_full_right_depth_0() {
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 0,
         };
@@ -263,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_full_right_depth_1() {
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 1,
         };
@@ -279,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_full_right_depth_2() {
-        let context = DfsContext {
+        let context = Dfs {
             idx: 0,
             distance_to_leaf: 2,
         };

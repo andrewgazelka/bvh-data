@@ -3,9 +3,9 @@
 #![feature(allocator_api)]
 
 pub use crate::aabb::Aabb;
-use crate::dfs::context::DfsContext;
+use crate::dfs::context::Dfs;
 use crate::dfs::depth_for_leaf_node_count;
-use crate::node::{Node, NodeExpanded};
+use crate::node::{Expanded, Node};
 use std::alloc::{Allocator, Global};
 use std::cell::Cell;
 use std::mem::MaybeUninit;
@@ -41,24 +41,24 @@ impl Point for glam::I16Vec2 {
     }
 }
 
-pub trait Data<'a> {
+pub trait Data {
     type Unit;
-    fn data(&self) -> &'a [Self::Unit];
+    fn data(&self) -> &[Self::Unit];
 }
 
 mod sealed {
     use crate::{Data, Point};
 
-    pub trait PointWithData<'a>: Point + Data<'a> {}
+    pub trait PointWithData: Point + Data {}
 }
 
-impl<'a, T> sealed::PointWithData<'a> for T where T: Point + Data<'a> {}
+impl<T> sealed::PointWithData for T where T: Point + Data {}
 
 impl<T> Bvh<T> {
     #[must_use]
-    pub fn build<'a, I>(input: Vec<I>, size_hint: usize) -> Self
+    pub fn build<I>(input: Vec<I>, size_hint: usize) -> Self
     where
-        I: PointWithData<'a, Unit = T>,
+        I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
         Self::build_in(input, size_hint, Global)
@@ -67,9 +67,10 @@ impl<T> Bvh<T> {
 
 impl<T, A: Allocator + Clone> Bvh<T, A> {
     #[must_use]
-    pub fn build_in<'a, I>(mut input: Vec<I>, size_hint: usize, alloc: A) -> Self
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn build_in<I>(mut input: Vec<I>, size_hint: usize, alloc: A) -> Self
     where
-        I: PointWithData<'a, Unit = T>,
+        I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
         // we will have max input.len() leaf nodes
@@ -77,7 +78,7 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
         let total_nodes_len = input.len() * 2 - 1;
         let depth = depth_for_leaf_node_count(leaf_node_count as u32);
 
-        let context = DfsContext::new(depth);
+        let context = Dfs::new(depth);
 
         let mut bvh = Self {
             nodes: Box::new_uninit_slice_in(total_nodes_len, alloc.clone()),
@@ -99,8 +100,8 @@ impl<T, A: Allocator> Bvh<T, A> {
         ptr.set(node);
     }
 
-    const fn root_context(&self) -> DfsContext {
-        DfsContext::new(self.depth)
+    const fn root_context(&self) -> Dfs {
+        Dfs::new(self.depth)
     }
 
     pub fn elements(&self) -> &[T] {
@@ -132,7 +133,7 @@ impl<T, A: Allocator> Bvh<T, A> {
 
             let expanded = node.into_expanded();
 
-            if let NodeExpanded::Leaf(leaf) = expanded {
+            if let Expanded::Leaf(leaf) = expanded {
                 return leaf.start as usize;
             }
 
@@ -141,10 +142,11 @@ impl<T, A: Allocator> Bvh<T, A> {
     }
 }
 
-fn build_bvh_helper<'a, T: PointWithData<'a>, A: Allocator>(
+#[allow(clippy::cast_possible_truncation)]
+fn build_bvh_helper<T: PointWithData, A: Allocator>(
     build: &mut Bvh<T::Unit, A>,
     elements: &mut [T],
-    context: DfsContext,
+    context: Dfs,
 ) where
     T::Unit: Copy + 'static,
 {

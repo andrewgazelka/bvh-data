@@ -35,7 +35,7 @@ impl Display for Leaf {
 
 const MSB_1_MASK: u32 = 0x8000_0000;
 
-pub enum NodeExpanded {
+pub enum Expanded {
     Aabb(Aabb),
     Leaf(Leaf),
 }
@@ -85,13 +85,18 @@ impl Node {
         }
     }
 
-    pub fn into_expanded(self) -> NodeExpanded {
+    pub fn into_expanded(self) -> Expanded {
         if let Some(leaf) = self.leaf_element_indices() {
-            return NodeExpanded::Leaf(leaf);
+            return Expanded::Leaf(leaf);
         }
-        NodeExpanded::Aabb(unsafe { self.aabb })
+        Expanded::Aabb(unsafe { self.aabb })
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_lossless,
+        clippy::cast_sign_loss
+    )]
     pub fn leaf(point: glam::I16Vec2, start: u32) -> Self {
         // make sure start is at most u30::MAX = 2^30 - 1 = 0x3FFFFFFF
         debug_assert!(
@@ -147,11 +152,11 @@ mod tests {
         let node = Node::leaf(I16Vec2::new(1, 2), 10);
         let expanded = node.into_expanded();
         match expanded {
-            NodeExpanded::Leaf(leaf) => {
+            Expanded::Leaf(leaf) => {
                 assert_eq!(leaf.point, I16Vec2::new(1, 2));
                 assert_eq!(leaf.start, 10);
             }
-            _ => panic!("Expected NodeExpanded::Leaf"),
+            Expanded::Aabb(_) => panic!("Expected NodeExpanded::Leaf"),
         }
     }
 
@@ -163,11 +168,11 @@ mod tests {
         let node = Node { aabb };
         let expanded = node.into_expanded();
         match expanded {
-            NodeExpanded::Aabb(aabb) => {
+            Expanded::Aabb(aabb) => {
                 assert_eq!(aabb.min, I16Vec2::new(0, 0));
                 assert_eq!(aabb.max, I16Vec2::new(1, 1));
             }
-            _ => panic!("Expected NodeExpanded::Aabb"),
+            Expanded::Leaf(_) => panic!("Expected NodeExpanded::Aabb"),
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::aabb::Aabb;
-use crate::dfs::context::DfsContext;
-use crate::node::NodeExpanded;
+use crate::dfs::context::Dfs;
+use crate::node::Expanded;
 use crate::Bvh;
 use arrayvec::ArrayVec;
 use std::alloc::Allocator;
@@ -12,7 +12,7 @@ const DFS_STACK_SIZE: usize = 32;
 impl<T, A: Allocator> Bvh<T, A> {
     pub fn get_in(&self, query: Aabb) -> impl IntoIterator<Item = Range<usize>> {
         let mut to_send_indices: ArrayVec<Range<usize>, MAX_SIZE> = ArrayVec::new();
-        let mut dfs_stack: ArrayVec<DfsContext, DFS_STACK_SIZE> = ArrayVec::new();
+        let mut dfs_stack: ArrayVec<Dfs, DFS_STACK_SIZE> = ArrayVec::new();
 
         // so we do not need special case (there is always a last)
         to_send_indices.push(0..0);
@@ -22,7 +22,7 @@ impl<T, A: Allocator> Bvh<T, A> {
             let node = unsafe { self.get_node(context.idx as usize) };
 
             match node.into_expanded() {
-                NodeExpanded::Leaf(leaf) => {
+                Expanded::Leaf(leaf) => {
                     if !query.contains_point(leaf.point) {
                         continue;
                     }
@@ -36,10 +36,10 @@ impl<T, A: Allocator> Bvh<T, A> {
                         // combine
                         last.end = end;
                     } else {
-                        to_send_indices.push(start as usize..end as usize);
+                        to_send_indices.push(start as usize..end);
                     }
                 }
-                NodeExpanded::Aabb(aabb) => {
+                Expanded::Aabb(aabb) => {
                     if !aabb.intersects(query) {
                         continue;
                     }

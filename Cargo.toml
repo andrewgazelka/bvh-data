@@ -1,5 +1,6 @@
 [package]
 name = "bvh"
+license = "MIT OR Apache-2.0"
 version = "0.1.0"
 edition = "2021"
 authors = ["Andrew Gazelka <andrew.gazelka@gmail.com>"]
@@ -9,7 +10,6 @@ publish = false
 [dependencies]
 arrayvec = "0.7.4"
 glam = "0.27.0"
-itertools = "0.12.1"
 
 [lints.clippy]
 complexity = "deny"
