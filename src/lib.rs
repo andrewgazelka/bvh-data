@@ -160,10 +160,6 @@ fn build_bvh_helper<T: PointWithData, A: Allocator>(
     let len = elements.len();
 
     debug_assert!(len != 0, "trying to build a BVH with no nodes");
-    // debug_assert!(
-    //     len.is_power_of_two(),
-    //     "we are using maths that are easier with perfectly filled trees"
-    // );
 
     let aabb = Aabb::enclosing_aabb(elements);
 

@@ -1,5 +1,5 @@
 // todo: should we pack?
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Dfs {
     pub idx: u32,
     pub distance_to_leaf: u8,

@@ -211,6 +211,39 @@ Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(4, 4) })
 }
 
 #[test]
+fn test_closest_player() {
+    let input = vec![
+        Player {
+            location: I16Vec2::new(0, 0),
+            id: 1,
+        },
+        Player {
+            location: I16Vec2::new(1, 1),
+            id: 2,
+        },
+        Player {
+            location: I16Vec2::new(2, 2),
+            id: 3,
+        },
+        Player {
+            location: I16Vec2::new(3, 3),
+            id: 4,
+        },
+        Player {
+            location: I16Vec2::new(4, 4),
+            id: 5,
+        },
+    ];
+
+    let size_hint = input.len();
+
+    let bvh = Bvh::<EntityId>::build(input, size_hint);
+
+    let result = bvh.get_closest_slice(I16Vec2::new(2, 2)).unwrap();
+    assert_eq!(result, &[3]); // id 2
+}
+
+#[test]
 fn test_build_bvh_with_non_power_of_2_players() {
     let input = vec![
         Player {

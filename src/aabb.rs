@@ -47,6 +47,23 @@ impl Aabb {
             && self.max.y >= other.min.y
     }
 
+    #[must_use]
+    pub fn min_distance2(self, point: glam::I16Vec2) -> u32 {
+        let this_lens = self.lens();
+
+        let enclosing = self.enclose(point);
+
+        let enclosing_lens = enclosing.lens();
+
+        let dx = enclosing_lens[0] - this_lens[0];
+        let dy = enclosing_lens[1] - this_lens[1];
+
+        let dx = u32::from(dx);
+        let dy = u32::from(dy);
+
+        dx * dy
+    }
+
     pub fn enclosing_aabb<I: Point>(elems: &[I]) -> Self {
         // 16 bits
         let mut min = glam::I16Vec2::MAX;
@@ -57,6 +74,17 @@ impl Aabb {
             min = min.min(elem);
             max = max.max(elem);
         }
+
+        Self::new(min, max)
+    }
+
+    #[must_use]
+    pub fn enclose(self, point: glam::I16Vec2) -> Self {
+        let mut min = self.min;
+        let mut max = self.max;
+
+        min = min.min(point);
+        max = max.max(point);
 
         Self::new(min, max)
     }

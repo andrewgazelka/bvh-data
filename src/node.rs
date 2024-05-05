@@ -22,6 +22,7 @@ pub union Node {
 const _: () = assert!(std::mem::size_of::<Aabb>() == std::mem::size_of::<i64>());
 const _: () = assert!(std::mem::size_of::<Node>() == std::mem::size_of::<i64>());
 
+#[derive(Debug, Copy, Clone)]
 pub struct Leaf {
     pub point: glam::I16Vec2,
     pub start: u32,
@@ -35,6 +36,7 @@ impl Display for Leaf {
 
 const MSB_1_MASK: u32 = 0x8000_0000;
 
+#[derive(Debug, Copy, Clone)]
 pub enum Expanded {
     Aabb(Aabb),
     Leaf(Leaf),
