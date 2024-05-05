@@ -6,6 +6,15 @@ struct ChunkWithPackets<'a> {
     packets_data: &'a [u8],
 }
 
+impl Default for ChunkWithPackets<'_> {
+    fn default() -> Self {
+        Self {
+            location: I16Vec2::new(0, 0),
+            packets_data: &[],
+        }
+    }
+}
+
 impl<'a> Point for ChunkWithPackets<'a> {
     // todo: test returning val vs ref
     fn point(&self) -> I16Vec2 {
@@ -80,12 +89,12 @@ fn test_build_bvh_with_local_packet() {
 
     let expected = r"
 Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(3, 3) })
-  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
   Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(3, 3) })
-    Leaf([0, 0] -> 0)
-    Leaf([1, 1] -> 4)
-    Leaf([2, 2] -> 8)
     Leaf([3, 3] -> 12)
+    Leaf([2, 2] -> 8)
+  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
+    Leaf([1, 1] -> 4)
+    Leaf([0, 0] -> 0)
     "
     .trim();
 

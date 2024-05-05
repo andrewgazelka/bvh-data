@@ -21,13 +21,13 @@ impl<T, A: Allocator> Bvh<T, A> {
         let mut queue = VecDeque::new();
         queue.push_back((self.root_context(), 0));
 
-        while let Some((context, depth)) = queue.pop_front() {
+        while let Some((context, depth)) = queue.pop_back() {
             let indent = "  ".repeat(depth);
             let node = unsafe { self.nodes[context.idx as usize].assume_init_ref().get() };
 
             match node.into_expanded() {
                 Expanded::Aabb(aabb) => {
-                    output.push_str(&format!("{}Internal({:?})\n", indent, aabb));
+                    output.push_str(&format!("{indent}Internal({aabb:?})\n"));
 
                     let left = context.left();
                     let right = context.right();
@@ -36,7 +36,7 @@ impl<T, A: Allocator> Bvh<T, A> {
                     queue.push_back((right, depth + 1));
                 }
                 Expanded::Leaf(leaf) => {
-                    output.push_str(&format!("{}Leaf({})\n", indent, leaf));
+                    output.push_str(&format!("{indent}Leaf({leaf})\n"));
                 }
             }
         }

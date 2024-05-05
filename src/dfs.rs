@@ -1,7 +1,11 @@
 pub mod context;
 
 #[allow(clippy::cast_possible_truncation)]
-pub const fn depth_for_leaf_node_count(leaf_node_count: u32) -> u8 {
+pub const fn depth_for_leaf_node_count(mut leaf_node_count: u32) -> u8 {
+    if !leaf_node_count.is_power_of_two() {
+        leaf_node_count = leaf_node_count.next_power_of_two();
+    }
+
     leaf_node_count.trailing_zeros() as u8
 }
 
@@ -23,6 +27,16 @@ mod tests {
          *     0
          *    / \
          *   1   2
+         */
+
+        assert_eq!(depth_for_leaf_node_count(3), 2);
+        /*
+         * Tree (depth 2):
+         *        0
+         *      /   \
+         *     1     4
+         *    / \   /
+         *   2   3 5
          */
 
         assert_eq!(depth_for_leaf_node_count(4), 2);

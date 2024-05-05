@@ -65,6 +65,13 @@ impl<T> Bvh<T> {
     }
 }
 
+const fn round_power_of_two(mut x: usize) -> usize {
+    if !x.is_power_of_two() {
+        x = x.next_power_of_two();
+    }
+    x
+}
+
 impl<T, A: Allocator + Clone> Bvh<T, A> {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
@@ -74,8 +81,8 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
         T: Copy + 'static,
     {
         // we will have max input.len() leaf nodes
-        let leaf_node_count = input.len();
-        let total_nodes_len = input.len() * 2 - 1;
+        let leaf_node_count = round_power_of_two(input.len());
+        let total_nodes_len = leaf_node_count * 2 - 1;
         let depth = depth_for_leaf_node_count(leaf_node_count as u32);
 
         let context = Dfs::new(depth);
@@ -153,10 +160,10 @@ fn build_bvh_helper<T: PointWithData, A: Allocator>(
     let len = elements.len();
 
     debug_assert!(len != 0, "trying to build a BVH with no nodes");
-    debug_assert!(
-        len.is_power_of_two(),
-        "we are using maths that are easier with perfectly filled trees"
-    );
+    // debug_assert!(
+    //     len.is_power_of_two(),
+    //     "we are using maths that are easier with perfectly filled trees"
+    // );
 
     let aabb = Aabb::enclosing_aabb(elements);
 

@@ -8,6 +8,15 @@ struct Player {
     id: EntityId,
 }
 
+impl Default for Player {
+    fn default() -> Self {
+        Self {
+            location: I16Vec2::new(0, 0),
+            id: 0,
+        }
+    }
+}
+
 impl Point for Player {
     // todo: test returning val vs ref
     fn point(&self) -> I16Vec2 {
@@ -71,12 +80,12 @@ fn test_build_bvh_with_local_player() {
 
     let expected = r"
 Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(3, 3) })
-  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
   Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(3, 3) })
-    Leaf([0, 0] -> 0)
-    Leaf([1, 1] -> 1)
-    Leaf([2, 2] -> 2)
     Leaf([3, 3] -> 3)
+    Leaf([2, 2] -> 2)
+  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
+    Leaf([1, 1] -> 1)
+    Leaf([0, 0] -> 0)
     "
     .trim();
 
@@ -145,4 +154,118 @@ fn test_query_multiple_players() {
     let query = Aabb::new(I16Vec2::new(10, 10), I16Vec2::new(10, 10));
     let result: Vec<_> = bvh.get_in(query).into_iter().collect();
     assert_eq!(result, vec![0..0]);
+}
+
+#[test]
+fn test_build_bvh_with_odd_number_of_players() {
+    let input = vec![
+        Player {
+            location: I16Vec2::new(0, 0),
+            id: 1,
+        },
+        Player {
+            location: I16Vec2::new(1, 1),
+            id: 2,
+        },
+        Player {
+            location: I16Vec2::new(2, 2),
+            id: 3,
+        },
+        Player {
+            location: I16Vec2::new(3, 3),
+            id: 4,
+        },
+        Player {
+            location: I16Vec2::new(4, 4),
+            id: 5,
+        },
+    ];
+
+    let size_hint = input.len();
+
+    let bvh = Bvh::<EntityId>::build(input, size_hint);
+
+    // Check the number of elements in the BVH
+    assert_eq!(bvh.elements().len(), 5);
+
+    // Check the contents of the elements
+    assert_eq!(bvh.elements(), [1, 2, 3, 4, 5]);
+
+    // Print it out
+    let s = bvh.print();
+
+    let expected = r"
+Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(4, 4) })
+  Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(4, 4) })
+    Internal(Aabb { min: I16Vec2(3, 3), max: I16Vec2(4, 4) })
+      Leaf([4, 4] -> 4)
+      Leaf([3, 3] -> 3)
+    Leaf([2, 2] -> 2)
+  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
+    Leaf([1, 1] -> 1)
+    Leaf([0, 0] -> 0)
+    "
+    .trim();
+
+    assert_eq!(s, expected);
+}
+
+#[test]
+fn test_build_bvh_with_non_power_of_2_players() {
+    let input = vec![
+        Player {
+            location: I16Vec2::new(0, 0),
+            id: 1,
+        },
+        Player {
+            location: I16Vec2::new(1, 1),
+            id: 2,
+        },
+        Player {
+            location: I16Vec2::new(2, 2),
+            id: 3,
+        },
+        Player {
+            location: I16Vec2::new(3, 3),
+            id: 4,
+        },
+        Player {
+            location: I16Vec2::new(4, 4),
+            id: 5,
+        },
+        Player {
+            location: I16Vec2::new(5, 5),
+            id: 6,
+        },
+    ];
+
+    let size_hint = input.len();
+
+    let bvh = Bvh::<EntityId>::build(input, size_hint);
+
+    // Check the number of elements in the BVH
+    assert_eq!(bvh.elements().len(), 6);
+
+    // Check the contents of the elements
+    assert_eq!(bvh.elements(), [1, 2, 3, 4, 5, 6]);
+
+    // Print it out
+    let s = bvh.print();
+
+    let expected = r"
+Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(5, 5) })
+  Internal(Aabb { min: I16Vec2(3, 3), max: I16Vec2(5, 5) })
+    Internal(Aabb { min: I16Vec2(4, 4), max: I16Vec2(5, 5) })
+      Leaf([5, 5] -> 5)
+      Leaf([4, 4] -> 4)
+    Leaf([3, 3] -> 3)
+  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(2, 2) })
+    Internal(Aabb { min: I16Vec2(1, 1), max: I16Vec2(2, 2) })
+      Leaf([2, 2] -> 2)
+      Leaf([1, 1] -> 1)
+    Leaf([0, 0] -> 0)
+    "
+    .trim();
+
+    assert_eq!(s, expected);
 }
