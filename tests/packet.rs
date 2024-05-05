@@ -43,6 +43,15 @@ fn test_local_packet() {
 }
 
 #[test]
+fn test_build_bvh_with_empty_input() {
+    let data: Vec<ChunkWithPackets> = vec![];
+
+    let bvh = Bvh::<u8>::build(data, 0);
+
+    assert_eq!(bvh.elements().len(), 0);
+}
+
+#[test]
 fn test_build_bvh_with_local_packet() {
     let data1 = [1, 2, 3, 4];
     let data2 = [5, 6, 7, 8];

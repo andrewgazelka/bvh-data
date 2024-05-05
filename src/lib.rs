@@ -90,6 +90,14 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
+        if input.is_empty() {
+            return Self {
+                nodes: Box::new_uninit_slice_in(0, alloc.clone()),
+                data: Vec::new_in(alloc),
+                depth: 0,
+            };
+        }
+
         // we will have max input.len() leaf nodes
         let leaf_node_count = round_power_of_two(input.len());
         let total_nodes_len = leaf_node_count * 2 - 1;
