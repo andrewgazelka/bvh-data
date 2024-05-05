@@ -50,10 +50,6 @@ impl<T, A: Allocator> Bvh<T, A> {
             }
         }
 
-        if self.depth == 0 {
-            return None;
-        }
-
         let new_node = |value: Dfs, expanded: Expanded| match expanded {
             Expanded::Aabb(aabb) => {
                 let dist2 = aabb.min_distance2(input);
@@ -118,7 +114,7 @@ impl<T, A: Allocator> Bvh<T, A> {
         None
     }
 
-    pub fn get_in(&self, query: Aabb) -> impl IntoIterator<Item = Range<usize>> {
+    pub fn get_in(&self, query: Aabb) -> ArrayVec<Range<usize>, DFS_STACK_SIZE> {
         let mut to_send_indices: ArrayVec<Range<usize>, MAX_SIZE> = ArrayVec::new();
 
         if self.data.is_empty() {

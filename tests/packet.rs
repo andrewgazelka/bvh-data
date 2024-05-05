@@ -49,6 +49,43 @@ fn test_build_bvh_with_empty_input() {
     let bvh = Bvh::<u8>::build(data, 0);
 
     assert_eq!(bvh.elements().len(), 0);
+
+    assert_eq!(bvh.get_closest_slice(I16Vec2::new(0, 0)), None);
+
+    assert_eq!(
+        bvh.get_in(Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(100, 100)))
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn test_build_bvh_1_packet() {
+    let data = [1];
+    let packet = ChunkWithPackets {
+        location: I16Vec2::new(1, 2),
+        packets_data: &data,
+    };
+
+    let bvh = Bvh::<u8>::build(vec![packet], 0);
+
+    assert_eq!(bvh.elements().len(), 1);
+
+    assert_eq!(
+        bvh.get_closest_slice(I16Vec2::new(1, 2)),
+        Some([1].as_slice())
+    );
+
+    assert_eq!(
+        bvh.get_closest_slice(I16Vec2::new(4, 4)),
+        Some([1].as_slice())
+    );
+
+    assert_eq!(
+        bvh.get_in(Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(100, 100)))
+            .len(),
+        1
+    );
 }
 
 #[test]
