@@ -211,6 +211,42 @@ Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(4, 4) })
 }
 
 #[test]
+fn test_fuzz() {
+    fastrand::seed(3);
+
+    for _ in 0..10 {
+        let num_elems = fastrand::usize(..100);
+        
+        
+        let elems: Vec<_> = (0..num_elems)
+            .map(|id| Player {
+                location: I16Vec2::new(fastrand::i16(-200..200), fastrand::i16(-200..200)),
+                id: id as u32,
+            })
+            .collect();
+
+        println!("built with {} elems", elems.len());
+        
+        
+
+        let size_hint = elems.len();
+
+        let bvh = Bvh::<u32>::build(elems, size_hint);
+
+        // printout
+        let printed = bvh.print();
+        println!("{printed}");
+
+        for _ in 0..1000 {
+            let point = I16Vec2::new(fastrand::i16(-200..200), fastrand::i16(-200..200));
+            println!("querying for {:?}", point);
+
+            let result: Vec<_> = bvh.get_closest_slice(point).unwrap().into_iter().collect();
+        }
+    }
+}
+
+#[test]
 fn test_closest_player() {
     let input = vec![
         Player {

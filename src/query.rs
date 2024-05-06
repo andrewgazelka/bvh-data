@@ -50,23 +50,43 @@ impl<T, A: Allocator> Bvh<T, A> {
             }
         }
 
-        let new_node = |value: Dfs, expanded: Expanded| match expanded {
+        let mut max_distance_to_closest = u32::MAX;
+
+        let mut new_node = |value: Dfs, expanded: Expanded| match expanded {
             Expanded::Aabb(aabb) => {
-                let dist2 = aabb.min_distance2(input);
-                MinNode {
-                    dist2,
+                let (dist2_min, dist2_max) = aabb.min_max_distance2(input);
+
+                if max_distance_to_closest < dist2_min {
+                    return None;
+                }
+
+                if dist2_max < max_distance_to_closest {
+                    max_distance_to_closest = dist2_max;
+                }
+
+                Some(MinNode {
+                    dist2: dist2_min,
                     expanded,
                     value,
-                }
+                })
             }
             Expanded::Leaf(leaf) => {
                 #[allow(clippy::cast_sign_loss)]
                 let dist2 = leaf.point.as_ivec2().distance_squared(input.as_ivec2()) as u32;
-                MinNode {
+
+                if max_distance_to_closest < dist2 {
+                    return None;
+                }
+
+                if dist2 < max_distance_to_closest {
+                    max_distance_to_closest = dist2;
+                }
+
+                Some(MinNode {
                     dist2,
                     expanded,
                     value,
-                }
+                })
             }
         };
 
@@ -93,20 +113,23 @@ impl<T, A: Allocator> Bvh<T, A> {
                     let start = leaf.start;
                     let end = self.get_next_data_for_idx(context.value.idx);
 
+                    println!("start is {start} and end is {end}");
                     return Some(start as usize..end);
                 }
                 Expanded::Aabb(..) => {
                     let left = context.value.left();
                     let node = unsafe { self.get_node(left.idx as usize) };
                     let node = node.into_expanded();
-                    let node = new_node(left, node);
-                    heap.push(node).unwrap();
+                    if let Some(node) = new_node(left, node) {
+                        heap.push(node).unwrap();
+                    }
 
                     let right = context.value.right();
                     let node = unsafe { self.get_node(right.idx as usize) };
                     let node = node.into_expanded();
-                    let node = new_node(right, node);
-                    heap.push(node).unwrap();
+                    if let Some(node) = new_node(right, node) {
+                        heap.push(node).unwrap();
+                    }
                 }
             }
         }
