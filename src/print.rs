@@ -26,7 +26,6 @@ impl<T, A: Allocator> Bvh<T, A> {
             let idx = context.idx;
             let node = unsafe { self.nodes[idx as usize].assume_init_ref().get() };
 
-
             match node.into_expanded() {
                 Expanded::Aabb(aabb) => {
                     output.push_str(&format!("{idx:02}\t{indent}Internal({aabb:?})\n"));

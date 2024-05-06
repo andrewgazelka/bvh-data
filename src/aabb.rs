@@ -5,8 +5,8 @@
 //!
 //! While we should be using more than i16 for chunk coordinates, this is for minigame servers and we are fine
 //! using it as we are optimizing for performance
-use std::fmt::{Debug, Formatter};
 use glam::U16Vec2;
+use std::fmt::{Debug, Formatter};
 
 use crate::Point;
 
