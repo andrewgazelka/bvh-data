@@ -5,13 +5,22 @@
 //!
 //! While we should be using more than i16 for chunk coordinates, this is for minigame servers and we are fine
 //! using it as we are optimizing for performance
+use glam::U16Vec2;
+use std::fmt::{Debug, Formatter};
+
 use crate::Point;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Aabb {
     // 64 bit
     pub min: glam::I16Vec2, // 32 bit
     pub max: glam::I16Vec2, // 32 bit
+}
+
+impl Debug for Aabb {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} -> {}", self.min, self.max)
+    }
 }
 
 impl Aabb {
@@ -48,20 +57,21 @@ impl Aabb {
     }
 
     #[must_use]
-    pub fn min_distance2(self, point: glam::I16Vec2) -> u32 {
-        let this_lens = self.lens();
+    pub fn min_max_distance2(self, point: glam::I16Vec2) -> (u32, u32) {
+        let this_lens = U16Vec2::from(self.lens());
 
         let enclosing = self.enclose(point);
 
-        let enclosing_lens = enclosing.lens();
+        let exterior_lens = U16Vec2::from(enclosing.lens());
+        let enclosing_lens = exterior_lens - this_lens;
 
-        let dx = enclosing_lens[0] - this_lens[0];
-        let dy = enclosing_lens[1] - this_lens[1];
+        let exterior_lens = exterior_lens.as_uvec2();
+        let enclosing_lens = enclosing_lens.as_uvec2();
 
-        let dx = u32::from(dx);
-        let dy = u32::from(dy);
+        let min_dist2 = enclosing_lens.dot(enclosing_lens);
+        let max_dist2 = exterior_lens.dot(exterior_lens);
 
-        dx * dy
+        (min_dist2, max_dist2)
     }
 
     pub fn enclosing_aabb<I: Point>(elems: &[I]) -> Self {

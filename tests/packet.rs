@@ -134,13 +134,13 @@ fn test_build_bvh_with_local_packet() {
     let s = bvh.print();
 
     let expected = r"
-Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(3, 3) })
-  Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(3, 3) })
-    Leaf([3, 3] -> 12)
-    Leaf([2, 2] -> 8)
-  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
-    Leaf([1, 1] -> 4)
-    Leaf([0, 0] -> 0)
+00	Internal([0, 0] -> [3, 3])
+04	  Internal([2, 2] -> [3, 3])
+06	    Leaf([3, 3] -> 12)
+05	    Leaf([2, 2] -> 8)
+01	  Internal([0, 0] -> [1, 1])
+03	    Leaf([1, 1] -> 4)
+02	    Leaf([0, 0] -> 0)
     "
     .trim();
 
