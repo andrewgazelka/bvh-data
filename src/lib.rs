@@ -1,41 +1,40 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(allocator_api)]
+#![feature(new_uninit)]
 
-pub use crate::aabb::Aabb;
-use crate::dfs::context::Dfs;
-use crate::dfs::depth_for_leaf_node_count;
-use crate::node::{Expanded, Node};
-use bitvec::vec::BitVec;
 use std::alloc::{Allocator, Global};
 use std::cell::Cell;
-use std::mem::MaybeUninit;
+use std::num::NonZeroU32;
 
+pub use crate::aabb::Aabb;
+use crate::node::{Expanded, Node};
 use crate::sealed::PointWithData;
 use crate::utils::partition_index_by_largest_axis;
 
 mod aabb;
 
-mod dfs;
 mod node;
 mod print;
 mod query;
 mod utils;
 
+//         1
+//      2     3
+//          4   5
+//
+
 pub struct Bvh<T, A: Allocator = Global> {
-    nodes: Box<[MaybeUninit<Cell<Node>>], A>,
+    nodes: Box<[Cell<Node>], A>,
     data: Vec<T, A>,
-    depth: u8,
-    is_leaf_node: BitVec,
 }
 
 impl<T, A: Allocator + Default> Default for Bvh<T, A> {
     fn default() -> Self {
         Self {
-            nodes: Box::new_uninit_slice_in(0, A::default()),
+            // zeroed so everything is equivalent to Aabb with 0,0
+            nodes: Box::new_in([], A::default()),
             data: Vec::with_capacity_in(0, A::default()),
-            depth: 0,
-            is_leaf_node: BitVec::new(),
         }
     }
 }
@@ -95,78 +94,84 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
     {
         if input.is_empty() {
             return Self {
-                nodes: Box::new_uninit_slice_in(0, alloc.clone()),
+                nodes: Box::new_in([], alloc.clone()),
                 data: Vec::new_in(alloc),
-                depth: 0,
-                is_leaf_node: BitVec::new(),
             };
         }
 
         // we will have max input.len() leaf nodes
         let leaf_node_count = round_power_of_two(input.len());
         let total_nodes_len = leaf_node_count * 2 - 1;
-        let depth = depth_for_leaf_node_count(leaf_node_count as u32);
-
-        let context = Dfs::new(depth);
 
         let mut bvh = Self {
-            nodes: Box::new_uninit_slice_in(total_nodes_len, alloc.clone()),
+            nodes: unsafe {
+                Box::new_zeroed_slice_in(total_nodes_len, alloc.clone()).assume_init()
+            },
             data: Vec::with_capacity_in(size_hint, alloc),
-            depth,
-            is_leaf_node: BitVec::repeat(false, total_nodes_len),
         };
 
-        build_bvh_helper(&mut bvh, &mut input, context);
+        build_bvh_helper(&mut bvh, &mut input, ROOT_IDX);
 
         bvh
     }
 }
 
 impl<T, A: Allocator> Bvh<T, A> {
-    fn set_node(&self, idx: usize, node: Node) {
+    fn set_node(&self, idx: u32, node: Node) {
         // todo: I think this is safe write, right?
-        let ptr = self.nodes[idx].as_ptr();
-        let ptr = unsafe { &*ptr };
+        let ptr = &self.nodes[idx as usize - 1];
         ptr.set(node);
-    }
-
-    const fn root_context(&self) -> Dfs {
-        Dfs::new(self.depth)
     }
 
     pub fn elements(&self) -> &[T] {
         &self.data
     }
 
-    unsafe fn get_node(&self, idx: usize) -> Node {
-        let ptr = self.nodes[idx].as_ptr();
-        let ptr = &*ptr;
+    unsafe fn get_node(&self, idx: u32) -> Node {
+        let ptr = &self.nodes[idx as usize - 1];
         ptr.get()
     }
 
-    // todo: this is impl pretty inefficiently. I feel there is an O(1) approach but I cannot think of it right now
-    pub fn get_next_data_for_idx(&self, idx: u32) -> usize {
-        // todo: is there a more efficient way to do this?
-        let idx_on = self
-            .is_leaf_node
-            .iter()
-            .enumerate()
-            .skip(idx as usize + 1)
-            .find(|(_, x)| *x == true)
-            .map(|(idx, _)| idx);
+    unsafe fn get_node_opt(&self, idx: u32) -> Option<Node> {
+        let ptr = self.nodes.get(idx as usize - 1)?;
+        Some(ptr.get())
+    }
 
-        let Some(idx_on) = idx_on else {
-            return self.data.len();
+    // todo: this is impl pretty inefficiently. I feel there is an O(1) approach but I cannot think of it right now
+    pub fn get_next_data_for_idx(&self, idx: u32) -> u32 {
+        // todo: is there a more efficient way to do this?
+        #[allow(clippy::cast_possible_truncation)]
+        let Some(sibling_right) = sibling_right(idx) else {
+            return self.elements().len() as u32;
         };
 
-        let node = unsafe { self.get_node(idx_on) };
+        let start = sibling_right.get();
 
-        let expanded = node.into_expanded();
+        let mut on = start;
 
-        if let Expanded::Leaf(leaf) = expanded {
-            leaf.start as usize
-        } else {
-            unreachable!()
+        // try to look down
+        while let Some(node) = unsafe { self.get_node_opt(on) } {
+            if let Expanded::Leaf(leaf) = node.into_expanded() {
+                return leaf.start;
+            }
+            on = child_left(on);
+        }
+
+        on = start;
+        // try to look up
+        loop {
+            let Some(parent) = parent(on) else {
+                unreachable!("This should never occur")
+            };
+
+            let parent = parent.get();
+
+            let node = unsafe { self.get_node(parent) };
+            let node = node.into_expanded();
+            if let Expanded::Leaf(leaf) = node {
+                return leaf.start;
+            }
+            on = parent;
         }
     }
 }
@@ -175,7 +180,7 @@ impl<T, A: Allocator> Bvh<T, A> {
 fn build_bvh_helper<T: PointWithData, A: Allocator>(
     build: &mut Bvh<T::Unit, A>,
     elements: &mut [T],
-    context: Dfs,
+    current_idx: u32,
 ) where
     T::Unit: Copy + 'static,
 {
@@ -194,19 +199,70 @@ fn build_bvh_helper<T: PointWithData, A: Allocator>(
         }
 
         let node = Node::leaf(point, start_index as u32);
-        build.set_node(context.idx as usize, node);
-        build.is_leaf_node.set(context.idx as usize, true);
+        build.set_node(current_idx, node);
 
         return;
     }
 
-    build.set_node(context.idx as usize, Node::aabb(aabb));
+    build.set_node(current_idx, Node::aabb(aabb));
 
-    let left_context = context.left();
-    let right_context = context.right();
+    let left_context = child_left(current_idx);
+    let right_context = child_right(current_idx);
 
     let (left, right) = partition_index_by_largest_axis(elements, aabb);
 
     build_bvh_helper(build, left, left_context);
     build_bvh_helper(build, right, right_context);
+}
+
+#[must_use]
+pub const fn child_left(idx: u32) -> u32 {
+    idx * 2
+}
+
+#[must_use]
+pub const fn parent(idx: u32) -> Option<NonZeroU32> {
+    NonZeroU32::new(idx / 2)
+}
+
+#[must_use]
+pub const fn child_right(idx: u32) -> u32 {
+    idx * 2 + 1
+}
+
+#[must_use]
+pub const fn sibling_right(idx: u32) -> Option<NonZeroU32> {
+    //      1
+    //    2   3
+    //   45   67
+
+    let tentative_next = idx + 1;
+
+    if tentative_next.is_power_of_two() {
+        // there is nothing to the right, we would be going to the next row
+        None
+    } else {
+        Some(unsafe { NonZeroU32::new_unchecked(tentative_next) })
+    }
+}
+
+const ROOT_IDX: u32 = 1;
+
+#[cfg(test)]
+mod tests {
+    use crate::sibling_right;
+    use std::num::NonZeroU32;
+
+    #[test]
+    fn test_sibling_right() {
+        assert_eq!(sibling_right(1), None);
+
+        assert_eq!(sibling_right(2), NonZeroU32::new(3));
+        assert_eq!(sibling_right(3), None);
+
+        assert_eq!(sibling_right(4), NonZeroU32::new(5));
+        assert_eq!(sibling_right(5), NonZeroU32::new(6));
+        assert_eq!(sibling_right(6), NonZeroU32::new(7));
+        assert_eq!(sibling_right(7), None);
+    }
 }

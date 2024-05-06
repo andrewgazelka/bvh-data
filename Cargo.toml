@@ -9,7 +9,6 @@ publish = false
 
 [dependencies]
 arrayvec = "0.7.4"
-bitvec = "1.0.1"
 glam = "0.26.0"
 heapless = "0.8.0"
 
@@ -26,3 +25,4 @@ suspicious = "deny"
 [dev-dependencies]
 fastrand = "2.0.2"
 itertools = "0.12.1"
+more-asserts = "0.3.1"

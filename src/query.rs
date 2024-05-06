@@ -6,9 +6,8 @@ use glam::I16Vec2;
 use heapless::binary_heap::Min;
 
 use crate::aabb::Aabb;
-use crate::dfs::context::Dfs;
 use crate::node::Expanded;
-use crate::Bvh;
+use crate::{child_left, child_right, Bvh, ROOT_IDX};
 
 const MAX_SIZE: usize = 32;
 const DFS_STACK_SIZE: usize = 32;
@@ -17,17 +16,18 @@ const HEAP_SIZE: usize = 32;
 impl<T, A: Allocator> Bvh<T, A> {
     pub fn get_closest_slice(&self, input: I16Vec2) -> Option<&[T]> {
         let idx = self.get_closest(input)?;
+        let idx = idx.start as usize..idx.end as usize;
         Some(&self.data[idx])
     }
 
     /// # Panics
     /// If there are too many elements that overflow `HEAP_SIZE`
-    pub fn get_closest(&self, input: I16Vec2) -> Option<Range<usize>> {
+    pub fn get_closest(&self, input: I16Vec2) -> Option<Range<u32>> {
         #[derive(Debug, Copy, Clone)]
         struct MinNode {
             dist2: u32,
             expanded: Expanded,
-            value: Dfs,
+            idx: u32,
         }
 
         impl PartialEq for MinNode {
@@ -52,7 +52,7 @@ impl<T, A: Allocator> Bvh<T, A> {
 
         let mut max_distance_to_closest = u32::MAX;
 
-        let mut new_node = |value: Dfs, expanded: Expanded| match expanded {
+        let mut new_node = |idx: u32, expanded: Expanded| match expanded {
             Expanded::Aabb(aabb) => {
                 let (dist2_min, dist2_max) = aabb.min_max_distance2(input);
 
@@ -67,7 +67,7 @@ impl<T, A: Allocator> Bvh<T, A> {
                 Some(MinNode {
                     dist2: dist2_min,
                     expanded,
-                    value,
+                    idx,
                 })
             }
             Expanded::Leaf(leaf) => {
@@ -85,7 +85,7 @@ impl<T, A: Allocator> Bvh<T, A> {
                 Some(MinNode {
                     dist2,
                     expanded,
-                    value,
+                    idx,
                 })
             }
         };
@@ -96,14 +96,14 @@ impl<T, A: Allocator> Bvh<T, A> {
 
         let mut heap: heapless::BinaryHeap<MinNode, Min, HEAP_SIZE> = heapless::BinaryHeap::new();
 
-        let root = self.root_context();
-        let node = unsafe { self.get_node(root.idx as usize) };
+        // root idx
+        let node = unsafe { self.get_node(ROOT_IDX) };
         let dist2 = u32::MAX;
 
         heap.push(MinNode {
             dist2,
             expanded: node.into_expanded(),
-            value: root,
+            idx: ROOT_IDX,
         })
         .unwrap();
 
@@ -111,20 +111,20 @@ impl<T, A: Allocator> Bvh<T, A> {
             match context.expanded {
                 Expanded::Leaf(leaf) => {
                     let start = leaf.start;
-                    let end = self.get_next_data_for_idx(context.value.idx);
+                    let end = self.get_next_data_for_idx(context.idx);
 
-                    return Some(start as usize..end);
+                    return Some(start..end);
                 }
                 Expanded::Aabb(..) => {
-                    let left = context.value.left();
-                    let node = unsafe { self.get_node(left.idx as usize) };
+                    let left = child_left(context.idx);
+                    let node = unsafe { self.get_node(left) };
                     let node = node.into_expanded();
                     if let Some(node) = new_node(left, node) {
                         heap.push(node).unwrap();
                     }
 
-                    let right = context.value.right();
-                    let node = unsafe { self.get_node(right.idx as usize) };
+                    let right = child_right(context.idx);
+                    let node = unsafe { self.get_node(right) };
                     let node = node.into_expanded();
                     if let Some(node) = new_node(right, node) {
                         heap.push(node).unwrap();
@@ -136,22 +136,22 @@ impl<T, A: Allocator> Bvh<T, A> {
         None
     }
 
-    pub fn get_in(&self, query: Aabb) -> ArrayVec<Range<usize>, DFS_STACK_SIZE> {
-        let mut to_send_indices: ArrayVec<Range<usize>, MAX_SIZE> = ArrayVec::new();
+    pub fn get_in(&self, query: Aabb) -> ArrayVec<Range<u32>, DFS_STACK_SIZE> {
+        let mut to_send_indices: ArrayVec<Range<u32>, MAX_SIZE> = ArrayVec::new();
 
         if self.data.is_empty() {
             // nothing
             return to_send_indices;
         }
 
-        let mut dfs_stack: ArrayVec<Dfs, DFS_STACK_SIZE> = ArrayVec::new();
+        let mut dfs_stack: ArrayVec<u32, DFS_STACK_SIZE> = ArrayVec::new();
 
         // so we do not need special case (there is always a last)
         to_send_indices.push(0..0);
-        dfs_stack.push(self.root_context());
+        dfs_stack.push(ROOT_IDX);
 
-        while let Some(context) = dfs_stack.pop() {
-            let node = unsafe { self.get_node(context.idx as usize) };
+        while let Some(idx) = dfs_stack.pop() {
+            let node = unsafe { self.get_node(idx) };
 
             match node.into_expanded() {
                 Expanded::Leaf(leaf) => {
@@ -160,15 +160,15 @@ impl<T, A: Allocator> Bvh<T, A> {
                     }
 
                     let start = leaf.start;
-                    let end = self.get_next_data_for_idx(context.idx);
+                    let end = self.get_next_data_for_idx(idx);
 
                     let last = unsafe { to_send_indices.last_mut().unwrap_unchecked() };
 
-                    if last.end == start as usize {
+                    if last.end == start {
                         // combine
                         last.end = end;
                     } else {
-                        to_send_indices.push(start as usize..end);
+                        to_send_indices.push(start..end);
                     }
                 }
                 Expanded::Aabb(aabb) => {
@@ -176,8 +176,8 @@ impl<T, A: Allocator> Bvh<T, A> {
                         continue;
                     }
 
-                    let left = context.left();
-                    let right = context.right();
+                    let left = child_left(idx);
+                    let right = child_right(idx);
 
                     dfs_stack.push(right);
 

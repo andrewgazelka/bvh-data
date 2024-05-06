@@ -1,5 +1,5 @@
 use crate::aabb::Aabb;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Two {
@@ -17,6 +17,14 @@ impl Display for Two {
 pub union Node {
     aabb: Aabb,
     two: Two,
+    one: u64,
+}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let one = unsafe { self.one };
+        f.write_fmt(format_args!("0x{one:X}"))
+    }
 }
 
 const _: () = assert!(std::mem::size_of::<Aabb>() == std::mem::size_of::<i64>());

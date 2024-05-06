@@ -67,9 +67,14 @@ fn test_build_bvh_1_packet() {
         packets_data: &data,
     };
 
-    let bvh = Bvh::<u8>::build(vec![packet], 0);
+    let bvh = Bvh::<u8>::build(vec![packet], 1);
+
+    let print = bvh.print();
+
+    assert_eq!(print, "01	Leaf([1, 2] -> 0)");
 
     assert_eq!(bvh.elements().len(), 1);
+    assert_eq!(bvh.elements(), &[1]);
 
     assert_eq!(
         bvh.get_closest_slice(I16Vec2::new(1, 2)),
@@ -134,13 +139,13 @@ fn test_build_bvh_with_local_packet() {
     let s = bvh.print();
 
     let expected = r"
-00	Internal([0, 0] -> [3, 3])
-04	  Internal([2, 2] -> [3, 3])
-06	    Leaf([3, 3] -> 12)
-05	    Leaf([2, 2] -> 8)
-01	  Internal([0, 0] -> [1, 1])
-03	    Leaf([1, 1] -> 4)
-02	    Leaf([0, 0] -> 0)
+01	Internal([0, 0] -> [3, 3])
+03	  Internal([2, 2] -> [3, 3])
+07	    Leaf([3, 3] -> 12)
+06	    Leaf([2, 2] -> 8)
+02	  Internal([0, 0] -> [1, 1])
+05	    Leaf([1, 1] -> 4)
+04	    Leaf([0, 0] -> 0)
     "
     .trim();
 
