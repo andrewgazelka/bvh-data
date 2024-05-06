@@ -6,6 +6,7 @@ pub use crate::aabb::Aabb;
 use crate::dfs::context::Dfs;
 use crate::dfs::depth_for_leaf_node_count;
 use crate::node::{Expanded, Node};
+use bitvec::vec::BitVec;
 use std::alloc::{Allocator, Global};
 use std::cell::Cell;
 use std::mem::MaybeUninit;
@@ -25,6 +26,7 @@ pub struct Bvh<T, A: Allocator = Global> {
     nodes: Box<[MaybeUninit<Cell<Node>>], A>,
     data: Vec<T, A>,
     depth: u8,
+    is_leaf_node: BitVec,
 }
 
 impl<T, A: Allocator + Default> Default for Bvh<T, A> {
@@ -33,6 +35,7 @@ impl<T, A: Allocator + Default> Default for Bvh<T, A> {
             nodes: Box::new_uninit_slice_in(0, A::default()),
             data: Vec::with_capacity_in(0, A::default()),
             depth: 0,
+            is_leaf_node: BitVec::new(),
         }
     }
 }
@@ -95,6 +98,7 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
                 nodes: Box::new_uninit_slice_in(0, alloc.clone()),
                 data: Vec::new_in(alloc),
                 depth: 0,
+                is_leaf_node: BitVec::new(),
             };
         }
 
@@ -109,6 +113,7 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
             nodes: Box::new_uninit_slice_in(total_nodes_len, alloc.clone()),
             data: Vec::with_capacity_in(size_hint, alloc),
             depth,
+            is_leaf_node: BitVec::repeat(false, total_nodes_len),
         };
 
         build_bvh_helper(&mut bvh, &mut input, context);
@@ -139,30 +144,29 @@ impl<T, A: Allocator> Bvh<T, A> {
         ptr.get()
     }
 
-    unsafe fn get_opt_node(&self, idx: usize) -> Option<Node> {
-        let ptr = self.nodes.get(idx)?.as_ptr();
-        let ptr = &*ptr;
-        Some(ptr.get())
-    }
-
     // todo: this is impl pretty inefficiently. I feel there is an O(1) approach but I cannot think of it right now
     pub fn get_next_data_for_idx(&self, idx: u32) -> usize {
-        let mut idx_on = (idx + 1) as usize;
+        // todo: is there a more efficient way to do this?
+        let idx_on = self
+            .is_leaf_node
+            .iter()
+            .enumerate()
+            .skip(idx as usize + 1)
+            .find(|(_, x)| *x == true)
+            .map(|(idx, _)| idx);
 
-        loop {
-            let node = unsafe { self.get_opt_node(idx_on) };
+        let Some(idx_on) = idx_on else {
+            return self.data.len();
+        };
 
-            let Some(node) = node else {
-                return self.data.len();
-            };
+        let node = unsafe { self.get_node(idx_on) };
 
-            let expanded = node.into_expanded();
+        let expanded = node.into_expanded();
 
-            if let Expanded::Leaf(leaf) = expanded {
-                return leaf.start as usize;
-            }
-
-            idx_on += 1;
+        if let Expanded::Leaf(leaf) = expanded {
+            leaf.start as usize
+        } else {
+            unreachable!()
         }
     }
 }
@@ -182,6 +186,7 @@ fn build_bvh_helper<T: PointWithData, A: Allocator>(
     let aabb = Aabb::enclosing_aabb(elements);
 
     if let Some(point) = aabb.to_unit() {
+        // this is a leaf node
         let start_index = build.data.len();
 
         for elem in elements {
@@ -190,6 +195,7 @@ fn build_bvh_helper<T: PointWithData, A: Allocator>(
 
         let node = Node::leaf(point, start_index as u32);
         build.set_node(context.idx as usize, node);
+        build.is_leaf_node.set(context.idx as usize, true);
 
         return;
     }

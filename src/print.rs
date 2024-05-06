@@ -23,11 +23,13 @@ impl<T, A: Allocator> Bvh<T, A> {
 
         while let Some((context, depth)) = queue.pop_back() {
             let indent = "  ".repeat(depth);
-            let node = unsafe { self.nodes[context.idx as usize].assume_init_ref().get() };
+            let idx = context.idx;
+            let node = unsafe { self.nodes[idx as usize].assume_init_ref().get() };
+
 
             match node.into_expanded() {
                 Expanded::Aabb(aabb) => {
-                    output.push_str(&format!("{indent}Internal({aabb:?})\n"));
+                    output.push_str(&format!("{idx:02}\t{indent}Internal({aabb:?})\n"));
 
                     let left = context.left();
                     let right = context.right();
@@ -36,7 +38,7 @@ impl<T, A: Allocator> Bvh<T, A> {
                     queue.push_back((right, depth + 1));
                 }
                 Expanded::Leaf(leaf) => {
-                    output.push_str(&format!("{indent}Leaf({leaf})\n"));
+                    output.push_str(&format!("{idx:02}\t{indent}Leaf({leaf})\n"));
                 }
             }
         }

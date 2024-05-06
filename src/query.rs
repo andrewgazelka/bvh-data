@@ -113,7 +113,6 @@ impl<T, A: Allocator> Bvh<T, A> {
                     let start = leaf.start;
                     let end = self.get_next_data_for_idx(context.value.idx);
 
-                    println!("start is {start} and end is {end}");
                     return Some(start as usize..end);
                 }
                 Expanded::Aabb(..) => {

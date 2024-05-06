@@ -1,8 +1,11 @@
 use bvh::{Aabb, Bvh, Data, Point};
 use glam::I16Vec2;
+use itertools::Itertools;
+use std::collections::HashMap;
 
 type EntityId = u32;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Player {
     location: I16Vec2,
     id: EntityId,
@@ -79,13 +82,13 @@ fn test_build_bvh_with_local_player() {
     let s = bvh.print();
 
     let expected = r"
-Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(3, 3) })
-  Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(3, 3) })
-    Leaf([3, 3] -> 3)
-    Leaf([2, 2] -> 2)
-  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
-    Leaf([1, 1] -> 1)
-    Leaf([0, 0] -> 0)
+00	Internal([0, 0] -> [3, 3])
+04	  Internal([2, 2] -> [3, 3])
+06	    Leaf([3, 3] -> 3)
+05	    Leaf([2, 2] -> 2)
+01	  Internal([0, 0] -> [1, 1])
+03	    Leaf([1, 1] -> 1)
+02	    Leaf([0, 0] -> 0)
     "
     .trim();
 
@@ -195,15 +198,15 @@ fn test_build_bvh_with_odd_number_of_players() {
     let s = bvh.print();
 
     let expected = r"
-Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(4, 4) })
-  Internal(Aabb { min: I16Vec2(2, 2), max: I16Vec2(4, 4) })
-    Internal(Aabb { min: I16Vec2(3, 3), max: I16Vec2(4, 4) })
-      Leaf([4, 4] -> 4)
-      Leaf([3, 3] -> 3)
-    Leaf([2, 2] -> 2)
-  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(1, 1) })
-    Leaf([1, 1] -> 1)
-    Leaf([0, 0] -> 0)
+00	Internal([0, 0] -> [4, 4])
+08	  Internal([2, 2] -> [4, 4])
+12	    Internal([3, 3] -> [4, 4])
+14	      Leaf([4, 4] -> 4)
+13	      Leaf([3, 3] -> 3)
+09	    Leaf([2, 2] -> 2)
+01	  Internal([0, 0] -> [1, 1])
+05	    Leaf([1, 1] -> 1)
+02	    Leaf([0, 0] -> 0)
     "
     .trim();
 
@@ -215,33 +218,44 @@ fn test_fuzz() {
     fastrand::seed(3);
 
     for _ in 0..10 {
-        let num_elems = fastrand::usize(..100);
-        
-        
+        let num_elems = fastrand::u32(..100);
+
         let elems: Vec<_> = (0..num_elems)
             .map(|id| Player {
                 location: I16Vec2::new(fastrand::i16(-200..200), fastrand::i16(-200..200)),
-                id: id as u32,
+                id,
             })
             .collect();
 
-        println!("built with {} elems", elems.len());
-        
-        
-
         let size_hint = elems.len();
 
-        let bvh = Bvh::<u32>::build(elems, size_hint);
+        let bvh = Bvh::<u32>::build(elems.clone(), size_hint);
 
-        // printout
-        let printed = bvh.print();
-        println!("{printed}");
+        assert_eq!(bvh.elements().len(), elems.len());
+
+        let input_elements_count: HashMap<_, _> = elems
+            .iter()
+            .map(|x| x.id)
+            .group_by(|&x| x)
+            .into_iter()
+            .map(|(key, group)| (key, group.count()))
+            .collect();
+
+        let bvh_elements_count: HashMap<_, _> = bvh
+            .elements()
+            .iter()
+            .group_by(|&x| x)
+            .into_iter()
+            .map(|(key, group)| (*key, group.count()))
+            .collect();
+
+        assert_eq!(input_elements_count, bvh_elements_count);
 
         for _ in 0..1000 {
             let point = I16Vec2::new(fastrand::i16(-200..200), fastrand::i16(-200..200));
-            println!("querying for {:?}", point);
 
-            let result: Vec<_> = bvh.get_closest_slice(point).unwrap().into_iter().collect();
+            // todo: check
+            let _result: Vec<_> = bvh.get_closest_slice(point).unwrap().iter().collect();
         }
     }
 }
@@ -274,6 +288,22 @@ fn test_closest_player() {
     let size_hint = input.len();
 
     let bvh = Bvh::<EntityId>::build(input, size_hint);
+
+    assert_eq!(
+        bvh.print(),
+        r"
+00	Internal([0, 0] -> [4, 4])
+08	  Internal([2, 2] -> [4, 4])
+12	    Internal([3, 3] -> [4, 4])
+14	      Leaf([4, 4] -> 4)
+13	      Leaf([3, 3] -> 3)
+09	    Leaf([2, 2] -> 2)
+01	  Internal([0, 0] -> [1, 1])
+05	    Leaf([1, 1] -> 1)
+02	    Leaf([0, 0] -> 0)
+    "
+        .trim()
+    );
 
     let result = bvh.get_closest_slice(I16Vec2::new(2, 2)).unwrap();
     assert_eq!(result, &[3]); // id 2
@@ -322,17 +352,17 @@ fn test_build_bvh_with_non_power_of_2_players() {
     let s = bvh.print();
 
     let expected = r"
-Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(5, 5) })
-  Internal(Aabb { min: I16Vec2(3, 3), max: I16Vec2(5, 5) })
-    Internal(Aabb { min: I16Vec2(4, 4), max: I16Vec2(5, 5) })
-      Leaf([5, 5] -> 5)
-      Leaf([4, 4] -> 4)
-    Leaf([3, 3] -> 3)
-  Internal(Aabb { min: I16Vec2(0, 0), max: I16Vec2(2, 2) })
-    Internal(Aabb { min: I16Vec2(1, 1), max: I16Vec2(2, 2) })
-      Leaf([2, 2] -> 2)
-      Leaf([1, 1] -> 1)
-    Leaf([0, 0] -> 0)
+00	Internal([0, 0] -> [5, 5])
+08	  Internal([3, 3] -> [5, 5])
+12	    Internal([4, 4] -> [5, 5])
+14	      Leaf([5, 5] -> 5)
+13	      Leaf([4, 4] -> 4)
+09	    Leaf([3, 3] -> 3)
+01	  Internal([0, 0] -> [2, 2])
+05	    Internal([1, 1] -> [2, 2])
+07	      Leaf([2, 2] -> 2)
+06	      Leaf([1, 1] -> 1)
+02	    Leaf([0, 0] -> 0)
     "
     .trim();
 

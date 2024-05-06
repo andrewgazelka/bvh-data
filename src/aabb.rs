@@ -5,15 +5,22 @@
 //!
 //! While we should be using more than i16 for chunk coordinates, this is for minigame servers and we are fine
 //! using it as we are optimizing for performance
+use std::fmt::{Debug, Formatter};
 use glam::U16Vec2;
 
 use crate::Point;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Aabb {
     // 64 bit
     pub min: glam::I16Vec2, // 32 bit
     pub max: glam::I16Vec2, // 32 bit
+}
+
+impl Debug for Aabb {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} -> {}", self.min, self.max)
+    }
 }
 
 impl Aabb {
