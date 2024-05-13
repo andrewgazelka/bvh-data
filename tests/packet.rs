@@ -141,10 +141,10 @@ fn test_build_bvh_with_local_packet() {
     let expected = r"
 01	Internal([0, 0] -> [3, 3])
 03	  Internal([2, 2] -> [3, 3])
-07	    Leaf([3, 3] -> 12)
-06	    Leaf([2, 2] -> 8)
+07	    Leaf([3, 3] -> 3)
+06	    Leaf([2, 2] -> 2)
 02	  Internal([0, 0] -> [1, 1])
-05	    Leaf([1, 1] -> 4)
+05	    Leaf([1, 1] -> 1)
 04	    Leaf([0, 0] -> 0)
     "
     .trim();

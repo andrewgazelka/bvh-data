@@ -8,7 +8,7 @@ use std::cell::Cell;
 use std::num::NonZeroU32;
 
 pub use crate::aabb::Aabb;
-use crate::node::{Expanded, Node};
+use crate::node::{Leaf, Node};
 use crate::sealed::PointWithData;
 use crate::utils::partition_index_by_largest_axis;
 
@@ -27,6 +27,7 @@ mod utils;
 pub struct Bvh<T, A: Allocator = Global> {
     nodes: Box<[Cell<Node>], A>,
     data: Vec<T, A>,
+    leafs: Vec<Leaf, A>,
 }
 
 impl<T, A: Allocator + Default> Default for Bvh<T, A> {
@@ -35,6 +36,7 @@ impl<T, A: Allocator + Default> Default for Bvh<T, A> {
             // zeroed so everything is equivalent to Aabb with 0,0
             nodes: Box::new_in([], A::default()),
             data: Vec::with_capacity_in(0, A::default()),
+            leafs: Vec::with_capacity_in(0, A::default()),
         }
     }
 }
@@ -95,7 +97,8 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
         if input.is_empty() {
             return Self {
                 nodes: Box::new_in([], alloc.clone()),
-                data: Vec::new_in(alloc),
+                data: Vec::new_in(alloc.clone()),
+                leafs: Vec::new_in(alloc),
             };
         }
 
@@ -107,10 +110,15 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
             nodes: unsafe {
                 Box::new_zeroed_slice_in(total_nodes_len, alloc.clone()).assume_init()
             },
-            data: Vec::with_capacity_in(size_hint, alloc),
+            data: Vec::with_capacity_in(size_hint, alloc.clone()),
+            leafs: Vec::with_capacity_in(size_hint, alloc),
         };
 
         build_bvh_helper(&mut bvh, &mut input, ROOT_IDX);
+
+        bvh.leafs.push(Leaf {
+            element_index: bvh.data.len() as u32,
+        });
 
         bvh
     }
@@ -131,49 +139,6 @@ impl<T, A: Allocator> Bvh<T, A> {
         let ptr = &self.nodes[idx as usize - 1];
         ptr.get()
     }
-
-    unsafe fn get_node_opt(&self, idx: u32) -> Option<Node> {
-        let ptr = self.nodes.get(idx as usize - 1)?;
-        Some(ptr.get())
-    }
-
-    // todo: this is impl pretty inefficiently. I feel there is an O(1) approach but I cannot think of it right now
-    pub fn get_next_data_for_idx(&self, idx: u32) -> u32 {
-        // todo: is there a more efficient way to do this?
-        #[allow(clippy::cast_possible_truncation)]
-        let Some(sibling_right) = sibling_right(idx) else {
-            return self.elements().len() as u32;
-        };
-
-        let start = sibling_right.get();
-
-        let mut on = start;
-
-        // try to look down
-        while let Some(node) = unsafe { self.get_node_opt(on) } {
-            if let Expanded::Leaf(leaf) = node.into_expanded() {
-                return leaf.start;
-            }
-            on = child_left(on);
-        }
-
-        on = start;
-        // try to look up
-        loop {
-            let Some(parent) = parent(on) else {
-                unreachable!("This should never occur")
-            };
-
-            let parent = parent.get();
-
-            let node = unsafe { self.get_node(parent) };
-            let node = node.into_expanded();
-            if let Expanded::Leaf(leaf) = node {
-                return leaf.start;
-            }
-            on = parent;
-        }
-    }
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -191,14 +156,20 @@ fn build_bvh_helper<T: PointWithData, A: Allocator>(
     let aabb = Aabb::enclosing_aabb(elements);
 
     if let Some(point) = aabb.to_unit() {
+        let leaf_idx = build.leafs.len();
+
         // this is a leaf node
         let start_index = build.data.len();
+
+        build.leafs.push(Leaf {
+            element_index: start_index as u32,
+        });
 
         for elem in elements {
             build.data.extend_from_slice(elem.data());
         }
 
-        let node = Node::leaf(point, start_index as u32);
+        let node = Node::leaf(point, leaf_idx as u32);
         build.set_node(current_idx, node);
 
         return;
@@ -250,8 +221,9 @@ const ROOT_IDX: u32 = 1;
 
 #[cfg(test)]
 mod tests {
-    use crate::sibling_right;
     use std::num::NonZeroU32;
+
+    use crate::sibling_right;
 
     #[test]
     fn test_sibling_right() {

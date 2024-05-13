@@ -31,15 +31,20 @@ const _: () = assert!(std::mem::size_of::<Aabb>() == std::mem::size_of::<i64>())
 const _: () = assert!(std::mem::size_of::<Node>() == std::mem::size_of::<i64>());
 
 #[derive(Debug, Copy, Clone)]
-pub struct Leaf {
+pub struct LeafPtr {
     pub point: glam::I16Vec2,
-    pub start: u32,
+    pub ptr: u32,
 }
 
-impl Display for Leaf {
+impl Display for LeafPtr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {}", self.point, self.start)
+        write!(f, "{} -> {}", self.point, self.ptr)
     }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Leaf {
+    pub element_index: u32,
 }
 
 const MSB_1_MASK: u32 = 0x8000_0000;
@@ -47,14 +52,14 @@ const MSB_1_MASK: u32 = 0x8000_0000;
 #[derive(Debug, Copy, Clone)]
 pub enum Expanded {
     Aabb(Aabb),
-    Leaf(Leaf),
+    Leaf(LeafPtr),
 }
 
 impl Node {
     // todo: we might be able to only need one index and just look at the next leaf node to determine the
     // range but this might be a bit more complicated.
     // Also it might be needed if we can store two indexes easily.
-    pub fn leaf_element_indices(self) -> Option<Leaf> {
+    pub fn leaf_element_indices(self) -> Option<LeafPtr> {
         let as_two = unsafe { self.two };
 
         let msb_left = as_two.left >> 31;
@@ -86,9 +91,9 @@ impl Node {
             // first 15 bits
             let start = ((left & 0x7FFF) << 15) | (right & 0x7FFF);
 
-            Some(Leaf {
+            Some(LeafPtr {
                 point: glam::I16Vec2::new(point_x, point_y),
-                start,
+                ptr: start,
             })
         } else {
             None
@@ -111,7 +116,7 @@ impl Node {
         // make sure start is at most u30::MAX = 2^30 - 1 = 0x3FFFFFFF
         debug_assert!(
             start <= 0x3FFF_FFFF,
-            "start must be at most u30::MAX (0x3FFF_FFFF)"
+            "ptr must be at most u30::MAX (0x3FFF_FFFF)"
         );
 
         // if converting directly to u32 will be a different transformation (because of 2's complement)
@@ -147,7 +152,7 @@ mod tests {
         let node = Node::leaf(I16Vec2::new(1, 2), 10);
         let indices = node.leaf_element_indices().unwrap();
         assert_eq!(indices.point, I16Vec2::new(1, 2));
-        assert_eq!(indices.start, 10);
+        assert_eq!(indices.ptr, 10);
     }
 
     #[test]
@@ -164,7 +169,7 @@ mod tests {
         match expanded {
             Expanded::Leaf(leaf) => {
                 assert_eq!(leaf.point, I16Vec2::new(1, 2));
-                assert_eq!(leaf.start, 10);
+                assert_eq!(leaf.ptr, 10);
             }
             Expanded::Aabb(_) => panic!("Expected NodeExpanded::Leaf"),
         }
@@ -191,7 +196,7 @@ mod tests {
         let node = Node::leaf(I16Vec2::new(0, 0), 0);
         let indices = node.leaf_element_indices().unwrap();
         assert_eq!(indices.point, I16Vec2::new(0, 0));
-        assert_eq!(indices.start, 0);
+        assert_eq!(indices.ptr, 0);
     }
 
     #[test]
@@ -199,7 +204,7 @@ mod tests {
         let node = Node::leaf(I16Vec2::new(-1, -2), 0x3FFF_FFFF);
         let indices = node.leaf_element_indices().unwrap();
         assert_eq!(indices.point, I16Vec2::new(-1, -2));
-        assert_eq!(indices.start, 0x3FFF_FFFF);
+        assert_eq!(indices.ptr, 0x3FFF_FFFF);
     }
 
     #[test]
@@ -208,16 +213,16 @@ mod tests {
 
         for _ in 0..1000 {
             let point = I16Vec2::new(fastrand::i16(..), fastrand::i16(..));
-            let start = fastrand::u32(..);
+            let ptr = fastrand::u32(..);
 
-            if start > 0x3FFF_FFFF {
+            if ptr > 0x3FFF_FFFF {
                 continue;
             }
 
-            let node = Node::leaf(point, start);
+            let node = Node::leaf(point, ptr);
             let indices = node.leaf_element_indices().unwrap();
             assert_eq!(indices.point, point);
-            assert_eq!(indices.start, start);
+            assert_eq!(indices.ptr, ptr);
         }
     }
 
@@ -226,17 +231,17 @@ mod tests {
         let node = Node::leaf(I16Vec2::new(i16::MAX, i16::MAX), 0x3FFF_FFFF);
         let indices = node.leaf_element_indices().unwrap();
         assert_eq!(indices.point, I16Vec2::new(i16::MAX, i16::MAX));
-        assert_eq!(indices.start, 0x3FFF_FFFF);
+        assert_eq!(indices.ptr, 0x3FFF_FFFF);
     }
 
     #[test]
-    #[should_panic(expected = "start must be at most u30::MAX (0x3FFF_FFFF)")]
+    #[should_panic(expected = "ptr must be at most u30::MAX (0x3FFF_FFFF)")]
     fn test_leaf_start_overflow() {
         Node::leaf(I16Vec2::new(0, 0), 0x4000_0000);
     }
 
     #[test]
-    #[should_panic(expected = "start must be at most u30::MAX (0x3FFF_FFFF)")]
+    #[should_panic(expected = "ptr must be at most u30::MAX (0x3FFF_FFFF)")]
     fn test_leaf_start_overflow_2() {
         Node::leaf(I16Vec2::new(0, 0), 0x7FFF_FFFF);
     }

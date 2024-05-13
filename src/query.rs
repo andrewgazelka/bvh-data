@@ -110,8 +110,9 @@ impl<T, A: Allocator> Bvh<T, A> {
         while let Some(context) = heap.pop() {
             match context.expanded {
                 Expanded::Leaf(leaf) => {
-                    let start = leaf.start;
-                    let end = self.get_next_data_for_idx(context.idx);
+                    let ptr = leaf.ptr;
+                    let start = self.leafs[ptr as usize].element_index;
+                    let end = self.leafs[ptr as usize + 1].element_index;
 
                     return Some(start..end);
                 }
@@ -159,8 +160,10 @@ impl<T, A: Allocator> Bvh<T, A> {
                         continue;
                     }
 
-                    let start = leaf.start;
-                    let end = self.get_next_data_for_idx(idx);
+                    let ptr = leaf.ptr;
+
+                    let start = self.leafs[ptr as usize].element_index;
+                    let end = self.leafs[ptr as usize + 1].element_index;
 
                     let last = unsafe { to_send_indices.last_mut().unwrap_unchecked() };
 
