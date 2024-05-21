@@ -79,6 +79,10 @@ impl<T> Bvh<T> {
     }
 }
 
+#[allow(clippy::non_send_fields_in_send_ty)]
+unsafe impl<T: Send, A: Allocator> Send for Bvh<T, A> {}
+unsafe impl<T: Sync, A: Allocator> Sync for Bvh<T, A> {}
+
 const fn round_power_of_two(mut x: usize) -> usize {
     if !x.is_power_of_two() {
         x = x.next_power_of_two();
