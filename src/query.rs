@@ -137,6 +137,13 @@ impl<T, A: Allocator> Bvh<T, A> {
         None
     }
 
+    pub fn get_in_slices(&self, query: Aabb) -> ArrayVec<&[T], DFS_STACK_SIZE> {
+        self.get_in(query)
+            .into_iter()
+            .map(|range| &self.data[range.start as usize..range.end as usize])
+            .collect()
+    }
+
     pub fn get_in(&self, query: Aabb) -> ArrayVec<Range<u32>, DFS_STACK_SIZE> {
         let mut to_send_indices: ArrayVec<Range<u32>, MAX_SIZE> = ArrayVec::new();
 
