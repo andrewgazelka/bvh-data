@@ -15,14 +15,14 @@ impl Default for ChunkWithPackets<'_> {
     }
 }
 
-impl<'a> Point for ChunkWithPackets<'a> {
+impl Point for ChunkWithPackets<'_> {
     // todo: test returning val vs ref
     fn point(&self) -> I16Vec2 {
         self.location
     }
 }
 
-impl<'a> Data for ChunkWithPackets<'a> {
+impl Data for ChunkWithPackets<'_> {
     type Unit = u8;
 
     fn data(&self) -> &[u8] {
@@ -46,7 +46,7 @@ fn test_local_packet() {
 fn test_build_bvh_with_empty_input() {
     let data: Vec<ChunkWithPackets> = vec![];
 
-    let bvh = Bvh::<u8>::build(data, 0);
+    let bvh = Bvh::build(data, 0);
 
     assert_eq!(bvh.elements().len(), 0);
 
@@ -67,7 +67,7 @@ fn test_build_bvh_1_packet() {
         packets_data: &data,
     };
 
-    let bvh = Bvh::<u8>::build(vec![packet], 1);
+    let bvh = Bvh::build(vec![packet], 1);
 
     let print = bvh.print();
 
@@ -121,7 +121,7 @@ fn test_build_bvh_with_local_packet() {
 
     let size_hint = input.len() * 4;
 
-    let bvh = Bvh::<u8>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Check the number of nodes in the BVH
     // assert_eq!(bvh.nodes.len(), 7);
@@ -163,7 +163,7 @@ fn test_query_single_packet() {
     let input = vec![packet];
     let size_hint = input.len() * 4;
 
-    let bvh = Bvh::<u8>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Query the exact location of the packet
     let query = Aabb::new(I16Vec2::new(1, 2), I16Vec2::new(1, 2));
@@ -204,7 +204,7 @@ fn test_query_multiple_packets() {
 
     let size_hint = input.len() * 4;
 
-    let bvh = Bvh::<u8>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Query a location that intersects with multiple packets
     let query = Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(2, 2));
@@ -220,4 +220,7 @@ fn test_query_multiple_packets() {
     let query = Aabb::new(I16Vec2::new(10, 10), I16Vec2::new(10, 10));
     let result: Vec<_> = bvh.get_in(query).into_iter().collect();
     assert_eq!(result, vec![0..0]);
+
+    // we can make bytes BVH
+    let _bvh = bvh.into_bytes();
 }

@@ -59,7 +59,7 @@ impl Node {
     // todo: we might be able to only need one index and just look at the next leaf node to determine the
     // range but this might be a bit more complicated.
     // Also it might be needed if we can store two indexes easily.
-    pub fn leaf_element_indices(self) -> Option<LeafPtr> {
+    pub const fn leaf_element_indices(self) -> Option<LeafPtr> {
         let as_two = unsafe { self.two };
 
         let msb_left = as_two.left >> 31;
@@ -100,7 +100,7 @@ impl Node {
         }
     }
 
-    pub fn into_expanded(self) -> Expanded {
+    pub const fn into_expanded(self) -> Expanded {
         if let Some(leaf) = self.leaf_element_indices() {
             return Expanded::Leaf(leaf);
         }

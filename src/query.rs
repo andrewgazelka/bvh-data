@@ -2,6 +2,7 @@ use std::alloc::Allocator;
 use std::ops::Range;
 
 use arrayvec::ArrayVec;
+use bytes::Bytes;
 use glam::I16Vec2;
 use heapless::binary_heap::Min;
 
@@ -13,13 +14,67 @@ const MAX_SIZE: usize = 32;
 const DFS_STACK_SIZE: usize = 32;
 const HEAP_SIZE: usize = 32;
 
-impl<T, A: Allocator> Bvh<T, A> {
+impl<A: Allocator> Bvh<Bytes, A> {
+    pub fn get_closest_slice_bytes(&self, input: I16Vec2) -> Option<Bytes> {
+        let idx = self.get_closest(input)?;
+        let idx = idx.start as usize..idx.end as usize;
+        Some(self.data.slice(idx))
+    }
+
+    pub fn get_in_slices_bytes(&self, query: Aabb) -> ArrayVec<Bytes, DFS_STACK_SIZE> {
+        self.get_in(query)
+            .into_iter()
+            .map(|range| self.data.slice(range.start as usize..range.end as usize))
+            .collect()
+    }
+}
+
+impl<T, A: Allocator> Bvh<Vec<T>, A> {
     pub fn get_closest_slice(&self, input: I16Vec2) -> Option<&[T]> {
         let idx = self.get_closest(input)?;
         let idx = idx.start as usize..idx.end as usize;
         Some(&self.data[idx])
     }
 
+    pub fn get_in_slices(&self, query: Aabb) -> ArrayVec<&[T], DFS_STACK_SIZE> {
+        self.get_in(query)
+            .into_iter()
+            .map(|range| &self.data[range.start as usize..range.end as usize])
+            .collect()
+    }
+}
+
+pub trait Len {
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl<T> Len for Vec<T> {
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl Len for Bytes {
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl Bvh<Vec<u8>> {
+    #[must_use]
+    pub fn into_bytes(self) -> Bvh<Bytes> {
+        Bvh {
+            nodes: self.nodes,
+            data: self.data.into(),
+            leafs: self.leafs,
+        }
+    }
+}
+
+impl<L: Len, A: Allocator> Bvh<L, A> {
     /// # Panics
     /// If there are too many elements that overflow `HEAP_SIZE`
     pub fn get_closest(&self, input: I16Vec2) -> Option<Range<u32>> {
@@ -135,13 +190,6 @@ impl<T, A: Allocator> Bvh<T, A> {
         }
 
         None
-    }
-
-    pub fn get_in_slices(&self, query: Aabb) -> ArrayVec<&[T], DFS_STACK_SIZE> {
-        self.get_in(query)
-            .into_iter()
-            .map(|range| &self.data[range.start as usize..range.end as usize])
-            .collect()
     }
 
     pub fn get_in(&self, query: Aabb) -> ArrayVec<Range<u32>, DFS_STACK_SIZE> {

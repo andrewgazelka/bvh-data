@@ -1,7 +1,6 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(allocator_api)]
-#![feature(new_uninit)]
 
 use std::alloc::{Allocator, Global};
 use std::cell::Cell;
@@ -19,23 +18,18 @@ mod print;
 mod query;
 mod utils;
 
-//         1
-//      2     3
-//          4   5
-//
-
-pub struct Bvh<T, A: Allocator = Global> {
+pub struct Bvh<L, A: Allocator = Global> {
     nodes: Box<[Cell<Node>], A>,
-    data: Vec<T, A>,
+    data: L,
     leafs: Vec<Leaf, A>,
 }
 
-impl<T, A: Allocator + Default> Default for Bvh<T, A> {
+impl<L: Default, A: Allocator + Default> Default for Bvh<L, A> {
     fn default() -> Self {
         Self {
             // zeroed so everything is equivalent to Aabb with 0,0
             nodes: Box::new_in([], A::default()),
-            data: Vec::with_capacity_in(0, A::default()),
+            data: L::default(),
             leafs: Vec::with_capacity_in(0, A::default()),
         }
     }
@@ -43,7 +37,6 @@ impl<T, A: Allocator + Default> Default for Bvh<T, A> {
 
 // broadcast buffer &[1,2,3,4,5,6]
 // packet info
-
 pub trait Point {
     /// Generally, this will be an [`u8`]
     fn point(&self) -> glam::I16Vec2;
@@ -68,11 +61,11 @@ mod sealed {
 
 impl<T> sealed::PointWithData for T where T: Point + Data {}
 
-impl<T> Bvh<T> {
+impl<T> Bvh<Vec<T>> {
     #[must_use]
     pub fn build<I>(input: Vec<I>, size_hint: usize) -> Self
     where
-        I: PointWithData<Unit=T>,
+        I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
         Self::build_in(input, size_hint, Global)
@@ -87,12 +80,12 @@ const fn round_power_of_two(x: usize) -> usize {
     x.next_power_of_two()
 }
 
-impl<T, A: Allocator + Clone> Bvh<T, A> {
+impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn build_in<I>(mut input: Vec<I>, size_hint: usize, alloc: A) -> Self
     where
-        I: PointWithData<Unit=T>,
+        I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
         if input.is_empty() {
@@ -125,7 +118,7 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
     }
 }
 
-impl<T, A: Allocator> Bvh<T, A> {
+impl<T, A: Allocator> Bvh<Vec<T, A>, A> {
     fn set_node(&self, idx: u32, node: Node) {
         // todo: I think this is safe write, right?
         let ptr = &self.nodes[idx as usize - 1];
@@ -135,7 +128,9 @@ impl<T, A: Allocator> Bvh<T, A> {
     pub fn elements(&self) -> &[T] {
         &self.data
     }
+}
 
+impl<L, A: Allocator> Bvh<L, A> {
     unsafe fn get_node(&self, idx: u32) -> Node {
         let ptr = &self.nodes[idx as usize - 1];
         ptr.get()
@@ -144,7 +139,7 @@ impl<T, A: Allocator> Bvh<T, A> {
 
 #[allow(clippy::cast_possible_truncation)]
 fn build_bvh_helper<T: PointWithData, A: Allocator>(
-    build: &mut Bvh<T::Unit, A>,
+    build: &mut Bvh<Vec<T::Unit, A>, A>,
     elements: &mut [T],
     current_idx: u32,
 ) where

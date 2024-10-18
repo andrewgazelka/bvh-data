@@ -71,7 +71,7 @@ fn test_build_bvh_with_local_player() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::<EntityId>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 4);
@@ -106,7 +106,7 @@ fn test_query_single_player() {
     let input = vec![player];
     let size_hint = input.len();
 
-    let bvh = Bvh::<EntityId>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Query the exact location of the player
     let query = Aabb::new(I16Vec2::new(1, 2), I16Vec2::new(1, 2));
@@ -156,7 +156,7 @@ fn test_query_multiple_players() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::<EntityId>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Query a location that intersects with multiple players
     let query = Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(2, 2));
@@ -201,7 +201,7 @@ fn test_build_bvh_with_odd_number_of_players() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::<EntityId>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 5);
@@ -244,7 +244,7 @@ fn test_fuzz() {
 
         let size_hint = elems.len();
 
-        let bvh = Bvh::<u32>::build(elems.clone(), size_hint);
+        let bvh = Bvh::build(elems.clone(), size_hint);
 
         assert_eq!(bvh.elements().len(), elems.len());
 
@@ -308,7 +308,7 @@ fn test_closest_player() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::<EntityId>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     //     assert_eq!(
     //         bvh.print(),
@@ -361,7 +361,7 @@ fn test_build_bvh_with_non_power_of_2_players() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::<EntityId>::build(input, size_hint);
+    let bvh = Bvh::build(input, size_hint);
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 6);

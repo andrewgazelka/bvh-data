@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use crate::node::Expanded;
 use crate::{child_left, child_right, Bvh, ROOT_IDX};
 
-impl<T, A: Allocator> Bvh<T, A> {
+impl<T, A: Allocator> Bvh<Vec<T, A>, A> {
     pub fn print(&self) -> String {
         let mut output = String::new();
         self.print_helper(&mut output);
