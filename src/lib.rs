@@ -72,7 +72,7 @@ impl<T> Bvh<T> {
     #[must_use]
     pub fn build<I>(input: Vec<I>, size_hint: usize) -> Self
     where
-        I: PointWithData<Unit = T>,
+        I: PointWithData<Unit=T>,
         T: Copy + 'static,
     {
         Self::build_in(input, size_hint, Global)
@@ -83,11 +83,8 @@ impl<T> Bvh<T> {
 unsafe impl<T: Send, A: Allocator> Send for Bvh<T, A> {}
 unsafe impl<T: Sync, A: Allocator> Sync for Bvh<T, A> {}
 
-const fn round_power_of_two(mut x: usize) -> usize {
-    if !x.is_power_of_two() {
-        x = x.next_power_of_two();
-    }
-    x
+const fn round_power_of_two(x: usize) -> usize {
+    x.next_power_of_two()
 }
 
 impl<T, A: Allocator + Clone> Bvh<T, A> {
@@ -95,7 +92,7 @@ impl<T, A: Allocator + Clone> Bvh<T, A> {
     #[allow(clippy::cast_possible_truncation)]
     pub fn build_in<I>(mut input: Vec<I>, size_hint: usize, alloc: A) -> Self
     where
-        I: PointWithData<Unit = T>,
+        I: PointWithData<Unit=T>,
         T: Copy + 'static,
     {
         if input.is_empty() {
