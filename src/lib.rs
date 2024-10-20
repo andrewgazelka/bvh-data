@@ -78,7 +78,7 @@ pub trait Data {
         = ()
     where
         Self: 'a;
-    fn data(&self, context: Self::Context<'_>) -> &[Self::Unit];
+    fn data<'a: 'c, 'b: 'c, 'c>(&'a self, context: Self::Context<'b>) -> &'c [Self::Unit];
 }
 
 mod sealed {
@@ -316,7 +316,8 @@ where
             points.push(point);
         }
 
-        result_data.extend_from_slice(elem.data(context));
+        let data = elem.data(context);
+        result_data.extend_from_slice(data);
         current_point = Some(point);
     }
 
@@ -362,7 +363,7 @@ mod tests {
     impl Data for TestPoint {
         type Unit = u8;
 
-        fn data(&self, _context: Self::Context<'_>) -> &[Self::Unit] {
+        fn data<'a: 'c, 'b: 'c, 'c>(&'a self, _context: Self::Context<'b>) -> &'c [Self::Unit] {
             &self.data
         }
     }

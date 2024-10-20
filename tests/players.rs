@@ -31,7 +31,7 @@ impl Point for Player {
 impl Data for Player {
     type Unit = EntityId;
 
-    fn data(&self, _context: Self::Context<'_>) -> &[EntityId] {
+    fn data<'a: 'c, 'b: 'c, 'c>(&'a self, _ctx: Self::Context<'b>) -> &'c [EntityId] {
         core::slice::from_ref(&self.id)
     }
 }
