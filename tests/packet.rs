@@ -35,7 +35,7 @@ impl Point for ChunkWithPackets<'_> {
 impl Data for ChunkWithPackets<'_> {
     type Unit = u8;
 
-    fn data(&self) -> &[u8] {
+    fn data(&self, _context: Self::Context) -> &[u8] {
         &self.packets_data
     }
 }
@@ -49,14 +49,14 @@ fn test_local_packet() {
     };
 
     assert_eq!(packet.point(), I16Vec2::new(1, 2));
-    assert_eq!(packet.data(), &data);
+    assert_eq!(packet.data(()), &data);
 }
 
 #[test]
 fn test_build_bvh_with_empty_input() {
     let data: Vec<ChunkWithPackets> = vec![];
 
-    let bvh = Bvh::build(data);
+    let bvh = Bvh::build(data, ());
 
     assert_eq!(bvh.elements().len(), 0);
 
@@ -77,7 +77,7 @@ fn test_build_bvh_1_packet() {
         packets_data: Cow::Borrowed(&data),
     };
 
-    let bvh = Bvh::build(vec![packet]);
+    let bvh = Bvh::build(vec![packet], ());
 
     let print = bvh.print();
 
@@ -129,7 +129,7 @@ fn test_build_bvh_with_local_packet() {
         },
     ];
 
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Check the number of nodes in the BVH
     // assert_eq!(bvh.nodes.len(), 7);
@@ -169,7 +169,7 @@ fn test_query_single_packet() {
     };
 
     let input = vec![packet];
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Query the exact location of the packet
     let query = Aabb::new(I16Vec2::new(1, 2), I16Vec2::new(1, 2));
@@ -208,7 +208,7 @@ fn test_query_multiple_packets() {
         },
     ];
 
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     println!("{bvh:?}");
 
@@ -325,7 +325,7 @@ proptest! {
     #[test]
     fn prop_build_bvh_includes_all_elements(chunks in proptest::collection::vec(arb_chunk_with_packets(), 0..100)) {
         // Determine size_hint as the total number of bytes
-        let bvh = Bvh::build(chunks.clone());
+        let bvh = Bvh::build(chunks.clone(), ());
 
         // Verify the total number of elements matches
         let expected_len: usize = chunks.iter().map(|chunk| chunk.packets_data.len()).sum();
@@ -351,7 +351,7 @@ fn test_query_point_returns_correct_packets(
     chunks: &Vec<ChunkWithPackets<'_>>,
     query_point: I16Vec2,
 ) {
-    let bvh = Bvh::build(chunks.clone());
+    let bvh = Bvh::build(chunks.clone(), ());
 
     let result = chunks.iter().into_group_map_by(|chunk| chunk.location);
 
@@ -414,7 +414,7 @@ fn test_query_point_edge_case() {
     ];
     let query_point = I16Vec2::new(0, -1);
 
-    let bvh = Bvh::build(chunks.clone());
+    let bvh = Bvh::build(chunks.clone(), ());
 
     // Find all chunks that contain the query_point
 
@@ -452,7 +452,7 @@ proptest! {
 
         let query_aabb = Aabb::new(I16Vec2::new(min_x, min_y), I16Vec2::new(max_x, max_y));
 
-        let bvh = Bvh::build(chunks.clone());
+        let bvh = Bvh::build(chunks.clone(), ());
 
         // Find all packets within the AABB
         let mut expected_packets: Vec<u8> = chunks.iter()
@@ -462,7 +462,7 @@ proptest! {
             })
             .flat_map(|chunk| chunk.packets_data.iter().copied())
             .collect();
-        
+
         expected_packets.sort_unstable();
 
         // Retrieve packets from BVH
@@ -471,7 +471,7 @@ proptest! {
             .flatten()
             .copied()
             .collect();
-        
+
         retrieved_packets.sort_unstable();
 
         // Compare expected and retrieved packets
@@ -480,7 +480,7 @@ proptest! {
 }
 
 fn test_build_bvh_with_single_packet(packet: &ChunkWithPackets<'_>) {
-    let bvh = Bvh::build(vec![packet.clone()]);
+    let bvh = Bvh::build(vec![packet.clone()], ());
 
     // Verify the BVH has exactly one element
     assert_eq!(bvh.elements().len(), packet.packets_data.len());
@@ -489,27 +489,28 @@ fn test_build_bvh_with_single_packet(packet: &ChunkWithPackets<'_>) {
     // The closest slice should return the packet's data
     assert_eq!(
         bvh.get_closest_slice(packet.location),
-        Some(packet.packets_data.as_ref())
-            .filter(|x| !x.is_empty())
+        Some(packet.packets_data.as_ref()).filter(|x| !x.is_empty())
     );
 
     // Querying any other point should also return the same packet
     let other_point = I16Vec2::new(packet.location.x + 10, packet.location.y + 10);
     assert_eq!(
         bvh.get_closest_slice(other_point),
-        Some(packet.packets_data.as_ref())
-            .filter(|x| !x.is_empty())
+        Some(packet.packets_data.as_ref()).filter(|x| !x.is_empty())
     );
 
     // Query within an all-encompassing AABB should include the packet
-    let query_aabb = Aabb::new(I16Vec2::new(i16::MIN, i16::MIN), I16Vec2::new(i16::MAX, i16::MAX));
+    let query_aabb = Aabb::new(
+        I16Vec2::new(i16::MIN, i16::MIN),
+        I16Vec2::new(i16::MAX, i16::MAX),
+    );
     let retrieved_packets: Vec<u8> = bvh
         .get_in_slices(query_aabb)
         .into_iter()
         .flatten()
         .copied()
         .collect();
-    
+
     assert_eq!(retrieved_packets, packet.packets_data.to_vec());
 }
 

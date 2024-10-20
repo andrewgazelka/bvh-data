@@ -31,7 +31,7 @@ impl Point for Player {
 impl Data for Player {
     type Unit = EntityId;
 
-    fn data(&self) -> &[EntityId] {
+    fn data(&self, _context: Self::Context) -> &[EntityId] {
         core::slice::from_ref(&self.id)
     }
 }
@@ -45,7 +45,7 @@ fn test_local_player() {
     };
 
     assert_eq!(player.point(), I16Vec2::new(1, 2));
-    assert_eq!(player.data(), &[id]);
+    assert_eq!(player.data(()), &[id]);
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn test_build_bvh_with_local_player() {
         },
     ];
 
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 4);
@@ -79,7 +79,7 @@ fn test_build_bvh_with_local_player() {
 
     // Print it out
     let s = bvh.print();
-    
+
     println!("{s}");
 
     let expected = r"
@@ -90,7 +90,7 @@ fn test_build_bvh_with_local_player() {
 02	  Internal([0, 0] -> [1, 1])
 05	    Leaf([1, 1] => [2])
 04	    Leaf([0, 0] => [1])    "
-    .trim();
+        .trim();
 
     assert_eq!(s, expected);
 }
@@ -103,7 +103,7 @@ fn test_query_single_player() {
     };
 
     let input = vec![player];
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Query the exact location of the player
     let query = Aabb::new(I16Vec2::new(1, 2), I16Vec2::new(1, 2));
@@ -151,7 +151,7 @@ fn test_query_multiple_players() {
         },
     ];
 
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Query a location that intersects with multiple players
     let query = Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(2, 2));
@@ -194,7 +194,7 @@ fn test_build_bvh_with_odd_number_of_players() {
         },
     ];
 
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 5);
@@ -235,25 +235,22 @@ fn test_fuzz() {
             })
             .collect();
 
-        let bvh = Bvh::build(elems.clone());
+        let bvh = Bvh::build(elems.clone(), ());
 
         assert_eq!(bvh.elements().len(), elems.len());
 
         let input_elements_count: HashMap<_, _> = elems
             .iter()
             .map(|x| x.id)
-            .group_by(|&x| x)
-            .into_iter()
-            .map(|(key, group)| (key, group.count()))
-            .collect();
+            .into_grouping_map_by(|&x| x)
+            .fold(0, |acc, _, _| acc + 1);
 
         let bvh_elements_count: HashMap<_, _> = bvh
             .elements()
             .iter()
-            .group_by(|&x| x)
-            .into_iter()
-            .map(|(key, group)| (*key, group.count()))
-            .collect();
+            .copied()
+            .into_grouping_map_by(|&x| x)
+            .fold(0, |acc, _, _| acc + 1);
 
         assert_eq!(input_elements_count, bvh_elements_count);
 
@@ -297,9 +294,7 @@ fn test_closest_player() {
         },
     ];
 
-    let size_hint = input.len();
-
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     //     assert_eq!(
     //         bvh.print(),
@@ -353,9 +348,7 @@ fn test_build_bvh_with_non_power_of_2_players() {
         },
     ];
 
-    let size_hint = input.len();
-
-    let bvh = Bvh::build(input);
+    let bvh = Bvh::build(input, ());
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 6);

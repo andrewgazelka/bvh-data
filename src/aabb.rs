@@ -7,7 +7,7 @@
 //! using it as we are optimizing for performance
 use crate::Point;
 use glam::U16Vec2;
-use more_asserts::{debug_assert_le, debug_assert_lt};
+use more_asserts::debug_assert_le;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Clone, Copy, PartialEq, Eq)]

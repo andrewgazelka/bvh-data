@@ -280,13 +280,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "ptr must be at most u30::MAX (0x3FFF_FFFF)")]
     fn test_leaf_start_overflow() {
-        Node::leaf(I16Vec2::new(0, 0), 0x4000_0000);
+        let _ = Node::leaf(I16Vec2::new(0, 0), 0x4000_0000);
     }
 
     #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "ptr must be at most u30::MAX (0x3FFF_FFFF)")]
     fn test_leaf_start_overflow_2() {
-        Node::leaf(I16Vec2::new(0, 0), 0x7FFF_FFFF);
+        let _ = Node::leaf(I16Vec2::new(0, 0), 0x7FFF_FFFF);
     }
 }

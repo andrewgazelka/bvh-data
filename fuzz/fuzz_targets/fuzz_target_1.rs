@@ -78,7 +78,7 @@ impl Point for ChunkWithPackets {
 impl bvh::Data for ChunkWithPackets {
     type Unit = u8;
 
-    fn data(&self) -> &[u8] {
+    fn data(&self, _context: Self::Context) -> &[u8] {
         &self.packets_data
     }
 }
@@ -99,7 +99,7 @@ fn bvh_query(bvh: &Bvh<Vec<u8>>, query: &Aabb) -> HashSet<u8> {
 }
 
 fuzz_target!(|input: FuzzInput| {
-    let bvh = Bvh::build(input.chunks.clone());
+    let bvh = Bvh::build(input.chunks.clone(), ());
 
     let naive_result = naive_query(&input.chunks, &input.query.0);
     let bvh_result = bvh_query(&bvh, &input.query.0);

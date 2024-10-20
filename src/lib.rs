@@ -2,6 +2,7 @@
 #![feature(generic_const_exprs)]
 #![feature(allocator_api)]
 #![feature(array_chunks)]
+#![feature(associated_type_defaults)]
 
 pub use crate::aabb::Aabb;
 use crate::node::{Expanded, Leaf, LeafPtr, Node};
@@ -18,7 +19,6 @@ pub mod node;
 mod print;
 
 mod query;
-mod utils;
 
 pub struct Bvh<L, A: Allocator = Global> {
     nodes: Box<[Cell<Node>], A>,
@@ -74,7 +74,8 @@ impl Point for &glam::I16Vec2 {
 
 pub trait Data {
     type Unit;
-    fn data(&self) -> &[Self::Unit];
+    type Context: Copy = ();
+    fn data(&self, context: Self::Context) -> &[Self::Unit];
 }
 
 mod sealed {
@@ -87,12 +88,12 @@ impl<T> sealed::PointWithData for T where T: Point + Data {}
 
 impl<T> Bvh<Vec<T>> {
     #[must_use]
-    pub fn build<I>(input: Vec<I>) -> Self
+    pub fn build<I>(input: Vec<I>, context: I::Context) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
-        Self::build_in(input, Global)
+        Self::build_in(input, Global, context)
     }
 }
 
@@ -104,7 +105,7 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::too_many_lines)]
-    pub fn build_in<I>(mut input: Vec<I>, alloc: A) -> Self
+    pub fn build_in<I>(mut input: Vec<I>, alloc: A, context: I::Context) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
@@ -124,7 +125,7 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
             fast_hilbert::xy2h(x, y, 32)
         });
 
-        let (data, mut leaves, points) = process_input(input, alloc.clone());
+        let (data, mut leaves, points) = process_input(input, alloc.clone(), context);
 
         let leaves_next_pow2 = leaves.len().next_power_of_two();
         let total_size = leaves_next_pow2 + leaves.len();
@@ -173,7 +174,7 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
                         let aabb = left.enclose(right.point);
                         Node::aabb(aabb)
                     }
-                    (Some(Expanded::Aabb(left)), right) => {
+                    (Some(Expanded::Aabb(left)), ..) => {
                         // todo: try to restructure to eliminate this branch
                         Node::aabb(left)
                     }
@@ -239,12 +240,6 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
 }
 
 impl<T, A: Allocator> Bvh<Vec<T, A>, A> {
-    fn set_node(&self, idx: u32, node: Node) {
-        // todo: I think this is safe write, right?
-        let ptr = &self.nodes[idx as usize - 1];
-        ptr.set(node);
-    }
-
     pub fn elements(&self) -> &[T] {
         &self.data
     }
@@ -297,6 +292,7 @@ pub const ROOT_IDX: u32 = 1;
 fn process_input<I, T, A>(
     input: Vec<I>,
     alloc: A,
+    context: I::Context,
 ) -> (Vec<T, A>, Vec<Leaf, A>, Vec<glam::I16Vec2, A>)
 where
     I: PointWithData<Unit = T>,
@@ -317,7 +313,7 @@ where
             points.push(point);
         }
 
-        result_data.extend_from_slice(elem.data());
+        result_data.extend_from_slice(elem.data(context));
         current_point = Some(point);
     }
 
@@ -362,7 +358,8 @@ mod tests {
 
     impl Data for TestPoint {
         type Unit = u8;
-        fn data(&self) -> &[Self::Unit] {
+
+        fn data(&self, _context: Self::Context) -> &[Self::Unit] {
             &self.data
         }
     }
@@ -392,7 +389,7 @@ mod tests {
             },
         ];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         assert_eq!(indices, vec![Leaf::new(0), Leaf::new(4), Leaf::new(6)]);
@@ -405,7 +402,7 @@ mod tests {
     #[test]
     fn test_process_input_empty() {
         let input: Vec<TestPoint> = vec![];
-        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
 
         assert!(result_data.is_empty());
         assert!(indices.is_empty());
@@ -419,7 +416,7 @@ mod tests {
             data: vec![42, 43],
         }];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![42, 43]);
         assert_eq!(indices, vec![Leaf::new(0)]);
@@ -443,7 +440,7 @@ mod tests {
             },
         ];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![1, 2, 3]);
         assert_eq!(indices, vec![Leaf::new(0), Leaf::new(1), Leaf::new(2)]);
@@ -470,7 +467,7 @@ mod tests {
             },
         ];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![1, 2, 3]);
         assert_eq!(indices, vec![Leaf::new(0), Leaf::new(2)]);

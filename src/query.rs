@@ -167,7 +167,7 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
             let ptr = leaf.ptr;
             let start = self.leaves[ptr as usize].element_index;
             let end = self.leaves[ptr as usize + 1].element_index;
-            
+
             println!("returning leaf {start}..{end}");
 
             return Some(start..end);
