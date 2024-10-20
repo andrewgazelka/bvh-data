@@ -1,10 +1,16 @@
+use crate::node::Expanded;
+use crate::Aabb;
+use crate::{child_left, child_right, Bvh, ROOT_IDX};
 use std::alloc::Allocator;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 
-use crate::node::Expanded;
-use crate::{child_left, child_right, Bvh, ROOT_IDX};
+struct Element {
+    idx: u32,
+    depth: usize,
+}
 
-impl<T, A: Allocator> Bvh<Vec<T, A>, A> {
+impl<T: Debug, A: Allocator> Bvh<Vec<T, A>, A> {
     pub fn print(&self) -> String {
         let mut output = String::new();
         self.print_helper(&mut output);
@@ -19,25 +25,57 @@ impl<T, A: Allocator> Bvh<Vec<T, A>, A> {
 
     fn print_helper(&self, output: &mut String) {
         let mut queue = VecDeque::new();
-        queue.push_back((ROOT_IDX, 0));
+        queue.push_back(Element {
+            idx: ROOT_IDX,
+            depth: 0,
+        });
 
-        while let Some((idx, depth)) = queue.pop_back() {
+        while let Some(Element { idx, depth }) = queue.pop_back() {
             let indent = "  ".repeat(depth);
             let node = unsafe { self.get_node(idx) };
 
+            // println!("idx {idx}, node {node:?}");
+
             match node.into_expanded() {
-                Expanded::Aabb(aabb) => {
+                Some(Expanded::Aabb(aabb)) => {
+                    if aabb == Aabb::INVALID {
+                        continue;
+                    }
+
                     output.push_str(&format!("{idx:02}\t{indent}Internal({aabb:?})\n"));
 
                     let left = child_left(idx);
                     let right = child_right(idx);
 
-                    queue.push_back((left, depth + 1));
-                    queue.push_back((right, depth + 1));
+                    queue.push_back(Element {
+                        idx: left,
+                        depth: depth + 1,
+                    });
+
+                    queue.push_back(Element {
+                        idx: right,
+                        depth: depth + 1,
+                    });
                 }
-                Expanded::Leaf(leaf) => {
-                    output.push_str(&format!("{idx:02}\t{indent}Leaf({leaf})\n"));
+                Some(Expanded::Leaf(leaf)) => {
+                    let leaf_point = leaf.point;
+
+                    let Some(left_leaf) = self.leaves.get(leaf.ptr as usize) else {
+                        unreachable!("leaf.ptr {} is out of bounds for leaf at point {leaf_point} at index {idx}", leaf.ptr);
+                    };
+
+                    let element_idx_start = left_leaf.element_index;
+
+                    let next_ptr = leaf.ptr + 1;
+                    let element_idx_end = self.leaves[next_ptr as usize].element_index;
+
+                    let data = &self.data[element_idx_start as usize..element_idx_end as usize];
+
+                    output.push_str(&format!(
+                        "{idx:02}\t{indent}Leaf({leaf_point} => {data:?})\n"
+                    ));
                 }
+                None => {}
             }
         }
     }

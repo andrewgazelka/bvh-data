@@ -1,27 +1,35 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(allocator_api)]
-
-use std::alloc::{Allocator, Global};
-use std::cell::Cell;
-use std::num::NonZeroU32;
+#![feature(array_chunks)]
 
 pub use crate::aabb::Aabb;
-use crate::node::{Leaf, Node};
+use crate::node::{Expanded, Leaf, LeafPtr, Node};
 use crate::sealed::PointWithData;
-use crate::utils::partition_index_by_largest_axis;
+use more_asserts::debug_assert_lt;
+use std::alloc::{Allocator, Global};
+use std::cell::Cell;
+use std::fmt::{Debug, Formatter};
+use std::num::NonZeroU32;
 
 mod aabb;
 
-mod node;
+pub mod node;
 mod print;
+
 mod query;
 mod utils;
 
 pub struct Bvh<L, A: Allocator = Global> {
     nodes: Box<[Cell<Node>], A>,
     data: L,
-    leafs: Vec<Leaf, A>,
+    leaves: Vec<Leaf, A>,
+}
+
+impl<T: Debug, A: Allocator> Debug for Bvh<Vec<T, A>, A> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.print())
+    }
 }
 
 impl<L: Default, A: Allocator + Default> Default for Bvh<L, A> {
@@ -30,13 +38,23 @@ impl<L: Default, A: Allocator + Default> Default for Bvh<L, A> {
             // zeroed so everything is equivalent to Aabb with 0,0
             nodes: Box::new_in([], A::default()),
             data: L::default(),
-            leafs: Vec::with_capacity_in(0, A::default()),
+            leaves: Vec::with_capacity_in(0, A::default()),
         }
     }
 }
 
-// broadcast buffer &[1,2,3,4,5,6]
-// packet info
+// const HALF_I16_MAX: u16 = (i16::MAX / 2) as u16; // 1_073_741_823
+
+#[must_use]
+pub fn add_half_max_and_convert(x: i16) -> u16 {
+    // todo: try more efficient method
+    // (x as u16).wrapping_add(HALF_I16_MAX)
+
+    let i16_min = i32::from(i16::MIN);
+    let naive_result = i32::from(x) - i16_min;
+    unsafe { u16::try_from(naive_result).unwrap_unchecked() }
+}
+
 pub trait Point {
     /// Generally, this will be an [`u8`]
     fn point(&self) -> glam::I16Vec2;
@@ -45,6 +63,12 @@ pub trait Point {
 impl Point for glam::I16Vec2 {
     fn point(&self) -> glam::I16Vec2 {
         *self
+    }
+}
+
+impl Point for &glam::I16Vec2 {
+    fn point(&self) -> glam::I16Vec2 {
+        **self
     }
 }
 
@@ -63,12 +87,12 @@ impl<T> sealed::PointWithData for T where T: Point + Data {}
 
 impl<T> Bvh<Vec<T>> {
     #[must_use]
-    pub fn build<I>(input: Vec<I>, size_hint: usize) -> Self
+    pub fn build<I>(input: Vec<I>) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
     {
-        Self::build_in(input, size_hint, Global)
+        Self::build_in(input, Global)
     }
 }
 
@@ -76,14 +100,11 @@ impl<T> Bvh<Vec<T>> {
 unsafe impl<T: Send, A: Allocator> Send for Bvh<T, A> {}
 unsafe impl<T: Sync, A: Allocator> Sync for Bvh<T, A> {}
 
-const fn round_power_of_two(x: usize) -> usize {
-    x.next_power_of_two()
-}
-
 impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
-    pub fn build_in<I>(mut input: Vec<I>, size_hint: usize, alloc: A) -> Self
+    #[allow(clippy::too_many_lines)]
+    pub fn build_in<I>(mut input: Vec<I>, alloc: A) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
@@ -92,29 +113,128 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
             return Self {
                 nodes: Box::new_in([], alloc.clone()),
                 data: Vec::new_in(alloc.clone()),
-                leafs: Vec::new_in(alloc),
+                leaves: Vec::new_in(alloc),
             };
         }
 
-        // we will have max input.len() leaf nodes
-        let leaf_node_count = round_power_of_two(input.len());
-        let total_nodes_len = leaf_node_count * 2 - 1;
-
-        let mut bvh = Self {
-            nodes: unsafe {
-                Box::new_zeroed_slice_in(total_nodes_len, alloc.clone()).assume_init()
-            },
-            data: Vec::with_capacity_in(size_hint, alloc.clone()),
-            leafs: Vec::with_capacity_in(size_hint, alloc),
-        };
-
-        build_bvh_helper(&mut bvh, &mut input, ROOT_IDX);
-
-        bvh.leafs.push(Leaf {
-            element_index: bvh.data.len() as u32,
+        input.sort_by_cached_key(|x| {
+            let point = x.point();
+            let x = add_half_max_and_convert(point.x);
+            let y = add_half_max_and_convert(point.y);
+            fast_hilbert::xy2h(x, y, 32)
         });
 
-        bvh
+        let (data, mut leaves, points) = process_input(input, alloc.clone());
+
+        let leaves_next_pow2 = leaves.len().next_power_of_two();
+        let total_size = leaves_next_pow2 + leaves.len();
+
+        let mut nodes = unsafe { Box::new_zeroed_slice_in(total_size, alloc).assume_init() };
+
+        let mut root_set = false;
+
+        for (i, &point) in points.iter().enumerate() {
+            let leaf = Node::leaf(point, unsafe { u32::try_from(i).unwrap_unchecked() });
+            let leaf = Cell::new(leaf);
+            let idx = i + leaves_next_pow2;
+
+            if idx == 1 {
+                root_set = true;
+            }
+
+            nodes[idx] = leaf;
+        }
+
+        let mut current_level_start = leaves_next_pow2 / 2;
+
+        while current_level_start >= 1 {
+            for i in current_level_start..(current_level_start * 2) {
+                if i == 1 {
+                    root_set = true;
+                }
+
+                let i = i as u32;
+
+                let left = child_left(i) as usize;
+                let right = child_right(i) as usize;
+
+                let left = nodes.get(left).map(Cell::get).and_then(Node::into_expanded);
+                let right = nodes
+                    .get(right)
+                    .map(Cell::get)
+                    .and_then(Node::into_expanded);
+
+                let parent_node = match (left, right) {
+                    (Some(Expanded::Aabb(left)), Some(Expanded::Aabb(right))) => {
+                        let aabb = left.merge(right);
+                        Node::aabb(aabb)
+                    }
+                    (Some(Expanded::Aabb(left)), Some(Expanded::Leaf(right))) => {
+                        let aabb = left.enclose(right.point);
+                        Node::aabb(aabb)
+                    }
+                    (Some(Expanded::Aabb(left)), right) => {
+                        // todo: try to restructure to eliminate this branch
+                        Node::aabb(left)
+                    }
+                    (Some(Expanded::Leaf(left)), Some(Expanded::Leaf(right))) // valid, valid
+                        if left.is_valid() && right.is_valid() =>
+                    {
+                        debug_assert!(left.point != right.point, "got {left:?} and {right:?}");
+                        let aabb = Aabb::enclosing_aabb([left.point, right.point]);
+                        Node::aabb(aabb)
+                    }
+                    (Some(Expanded::Leaf(left)), _) // valid, invalid
+                        if left.is_valid() =>
+                    {
+                        Node::from(left)
+                    }
+                    (left, right) => {
+                        #[cfg(debug_assertions)]
+                        {
+                            if let Some(left) = left {
+                                let Expanded::Leaf(left) = left else { unreachable!() };
+                                debug_assert!(left.is_invalid(), "expected invalid left leaf, got {left:?}");
+                            }
+
+                            if let Some(right) = right {
+                                let Expanded::Leaf(right) = right else { unreachable!() };
+                                debug_assert!(right.is_invalid(), "expected invalid right leaf, got {right:?}");
+                            }
+
+                        }
+                        Node::from(LeafPtr::INVALID)
+                    },
+                };
+
+                #[cfg(debug_assertions)]
+                {
+                    if let Some(Expanded::Leaf(leaf)) = parent_node.into_expanded() {
+                        debug_assert_lt!(
+                                leaf.ptr,
+                                leaves.len() as u32,
+                                "leaf.ptr {} is out of bounds for leaves.len() of {}, left leaf: {left:?}, right leaf: {right:?}",
+                                leaf.ptr,
+                                leaves.len()
+                        );
+                    }
+                }
+
+                nodes[i as usize] = Cell::new(parent_node);
+            }
+
+            current_level_start /= 2;
+        }
+
+        debug_assert!(root_set);
+
+        leaves.push(Leaf::new(data.len() as u32));
+
+        Self {
+            nodes,
+            data,
+            leaves,
+        }
     }
 }
 
@@ -131,55 +251,14 @@ impl<T, A: Allocator> Bvh<Vec<T, A>, A> {
 }
 
 impl<L, A: Allocator> Bvh<L, A> {
-    unsafe fn get_node(&self, idx: u32) -> Node {
-        let ptr = &self.nodes[idx as usize - 1];
+    /// # Safety
+    /// todo
+    #[allow(clippy::missing_panics_doc)]
+    pub unsafe fn get_node(&self, idx: u32) -> Node {
+        debug_assert_lt!(u64::from(idx), u64::try_from(self.nodes.len()).unwrap());
+        let ptr = self.nodes.get_unchecked(idx as usize);
         ptr.get()
     }
-}
-
-#[allow(clippy::cast_possible_truncation)]
-fn build_bvh_helper<T: PointWithData, A: Allocator>(
-    build: &mut Bvh<Vec<T::Unit, A>, A>,
-    elements: &mut [T],
-    current_idx: u32,
-) where
-    T::Unit: Copy + 'static,
-{
-    let len = elements.len();
-
-    debug_assert!(len != 0, "trying to build a BVH with no nodes");
-
-    let aabb = Aabb::enclosing_aabb(elements);
-
-    if let Some(point) = aabb.to_unit() {
-        let leaf_idx = build.leafs.len();
-
-        // this is a leaf node
-        let start_index = build.data.len();
-
-        build.leafs.push(Leaf {
-            element_index: start_index as u32,
-        });
-
-        for elem in elements {
-            build.data.extend_from_slice(elem.data());
-        }
-
-        let node = Node::leaf(point, leaf_idx as u32);
-        build.set_node(current_idx, node);
-
-        return;
-    }
-
-    build.set_node(current_idx, Node::aabb(aabb));
-
-    let left_context = child_left(current_idx);
-    let right_context = child_right(current_idx);
-
-    let (left, right) = partition_index_by_largest_axis(elements, aabb);
-
-    build_bvh_helper(build, left, left_context);
-    build_bvh_helper(build, right, right_context);
 }
 
 #[must_use]
@@ -213,10 +292,45 @@ pub const fn sibling_right(idx: u32) -> Option<NonZeroU32> {
     }
 }
 
-const ROOT_IDX: u32 = 1;
+pub const ROOT_IDX: u32 = 1;
+
+fn process_input<I, T, A>(
+    input: Vec<I>,
+    alloc: A,
+) -> (Vec<T, A>, Vec<Leaf, A>, Vec<glam::I16Vec2, A>)
+where
+    I: PointWithData<Unit = T>,
+    T: Copy + 'static,
+    A: Allocator + Clone,
+{
+    let mut result_data = Vec::new_in(alloc.clone());
+    let mut indices = Vec::new_in(alloc.clone());
+    let mut points = Vec::new_in(alloc);
+    let mut current_point = None;
+
+    for elem in input {
+        let point = elem.point();
+
+        if Some(point) != current_point {
+            let index = unsafe { u32::try_from(result_data.len()).unwrap_unchecked() };
+            indices.push(Leaf::new(index));
+            points.push(point);
+        }
+
+        result_data.extend_from_slice(elem.data());
+        current_point = Some(point);
+    }
+
+    (result_data, indices, points)
+}
 
 #[cfg(test)]
 mod tests {
+    use crate::process_input;
+    use crate::Data;
+    use crate::Leaf;
+    use crate::Point;
+    use glam::I16Vec2;
     use std::num::NonZeroU32;
 
     use crate::sibling_right;
@@ -232,5 +346,134 @@ mod tests {
         assert_eq!(sibling_right(5), NonZeroU32::new(6));
         assert_eq!(sibling_right(6), NonZeroU32::new(7));
         assert_eq!(sibling_right(7), None);
+    }
+
+    #[derive(Clone)]
+    struct TestPoint {
+        point: I16Vec2,
+        data: Vec<u8>,
+    }
+
+    impl Point for TestPoint {
+        fn point(&self) -> I16Vec2 {
+            self.point
+        }
+    }
+
+    impl Data for TestPoint {
+        type Unit = u8;
+        fn data(&self) -> &[Self::Unit] {
+            &self.data
+        }
+    }
+
+    #[test]
+    fn test_process_input() {
+        let input = vec![
+            TestPoint {
+                point: I16Vec2::new(0, 0),
+                data: vec![1, 2],
+            },
+            TestPoint {
+                point: I16Vec2::new(0, 0),
+                data: vec![3, 4],
+            },
+            TestPoint {
+                point: I16Vec2::new(1, 1),
+                data: vec![5, 6],
+            },
+            TestPoint {
+                point: I16Vec2::new(2, 2),
+                data: vec![7, 8],
+            },
+            TestPoint {
+                point: I16Vec2::new(2, 2),
+                data: vec![9, 10],
+            },
+        ];
+
+        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+
+        assert_eq!(result_data, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(indices, vec![Leaf::new(0), Leaf::new(4), Leaf::new(6)]);
+        assert_eq!(
+            points,
+            vec![I16Vec2::new(0, 0), I16Vec2::new(1, 1), I16Vec2::new(2, 2),]
+        );
+    }
+
+    #[test]
+    fn test_process_input_empty() {
+        let input: Vec<TestPoint> = vec![];
+        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+
+        assert!(result_data.is_empty());
+        assert!(indices.is_empty());
+        assert!(points.is_empty());
+    }
+
+    #[test]
+    fn test_process_input_single_point() {
+        let input = vec![TestPoint {
+            point: I16Vec2::new(5, 5),
+            data: vec![42, 43],
+        }];
+
+        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+
+        assert_eq!(result_data, vec![42, 43]);
+        assert_eq!(indices, vec![Leaf::new(0)]);
+        assert_eq!(points, vec![I16Vec2::new(5, 5)]);
+    }
+
+    #[test]
+    fn test_process_input_all_unique_points() {
+        let input = vec![
+            TestPoint {
+                point: I16Vec2::new(0, 0),
+                data: vec![1],
+            },
+            TestPoint {
+                point: I16Vec2::new(1, 1),
+                data: vec![2],
+            },
+            TestPoint {
+                point: I16Vec2::new(2, 2),
+                data: vec![3],
+            },
+        ];
+
+        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+
+        assert_eq!(result_data, vec![1, 2, 3]);
+        assert_eq!(indices, vec![Leaf::new(0), Leaf::new(1), Leaf::new(2)]);
+        assert_eq!(
+            points,
+            vec![I16Vec2::new(0, 0), I16Vec2::new(1, 1), I16Vec2::new(2, 2)]
+        );
+    }
+
+    #[test]
+    fn test_process_input_multiple_same_key() {
+        let input = vec![
+            TestPoint {
+                point: I16Vec2::new(0, 0),
+                data: vec![1],
+            },
+            TestPoint {
+                point: I16Vec2::new(0, 0),
+                data: vec![2],
+            },
+            TestPoint {
+                point: I16Vec2::new(1, 1),
+                data: vec![3],
+            },
+        ];
+
+        let (result_data, indices, points) = process_input(input, std::alloc::Global);
+
+        assert_eq!(result_data, vec![1, 2, 3]);
+        assert_eq!(indices, vec![Leaf::new(0), Leaf::new(2)]);
+        assert_eq!(points, vec![I16Vec2::new(0, 0), I16Vec2::new(1, 1)]);
     }
 }

@@ -1,6 +1,6 @@
 use crate::aabb::Aabb;
 pub use crate::utils::array::NonZeroArrayExt;
-use crate::{round_power_of_two, Point};
+use crate::Point;
 
 mod array;
 
@@ -11,7 +11,7 @@ pub fn partition_index_by_largest_axis<T: Point>(
     let lens = aabb.lens();
     let select_idx = lens.max_index();
 
-    let median_idx = round_power_of_two(elements.len()) / 2;
+    let median_idx = elements.len().next_power_of_two() / 2;
 
     elements.select_nth_unstable_by(median_idx, |a, b| {
         // todo: bench efficiency of not having checked Index

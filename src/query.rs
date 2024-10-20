@@ -69,7 +69,7 @@ impl Bvh<Vec<u8>> {
         Bvh {
             nodes: self.nodes,
             data: self.data.into(),
-            leafs: self.leafs,
+            leaves: self.leaves,
         }
     }
 }
@@ -77,6 +77,7 @@ impl Bvh<Vec<u8>> {
 impl<L: Len, A: Allocator> Bvh<L, A> {
     /// # Panics
     /// If there are too many elements that overflow `HEAP_SIZE`
+    #[allow(clippy::too_many_lines)]
     pub fn get_closest(&self, input: I16Vec2) -> Option<Range<u32>> {
         #[derive(Debug, Copy, Clone)]
         struct MinNode {
@@ -126,8 +127,13 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
                 })
             }
             Expanded::Leaf(leaf) => {
+                if leaf.is_invalid() {
+                    return None;
+                }
+
                 #[allow(clippy::cast_sign_loss)]
-                let dist2 = leaf.point.as_ivec2().distance_squared(input.as_ivec2()) as u32;
+                let difference = (leaf.point.as_ivec2() - input.as_ivec2()).abs().as_uvec2();
+                let dist2 = difference.length_squared();
 
                 if max_distance_to_closest < dist2 {
                     return None;
@@ -153,11 +159,25 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
 
         // root idx
         let node = unsafe { self.get_node(ROOT_IDX) };
+        let expanded_node = node.into_expanded().expect("root node is always valid");
+
+        if let Expanded::Leaf(leaf) = expanded_node {
+            // if root node is a leaf, return the leaf
+
+            let ptr = leaf.ptr;
+            let start = self.leaves[ptr as usize].element_index;
+            let end = self.leaves[ptr as usize + 1].element_index;
+            
+            println!("returning leaf {start}..{end}");
+
+            return Some(start..end);
+        }
+
         let dist2 = u32::MAX;
 
         heap.push(MinNode {
             dist2,
-            expanded: node.into_expanded(),
+            expanded: node.into_expanded().expect("root node is always valid"),
             idx: ROOT_IDX,
         })
         .unwrap();
@@ -166,24 +186,28 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
             match context.expanded {
                 Expanded::Leaf(leaf) => {
                     let ptr = leaf.ptr;
-                    let start = self.leafs[ptr as usize].element_index;
-                    let end = self.leafs[ptr as usize + 1].element_index;
+                    let start = self.leaves[ptr as usize].element_index;
+                    let end = self.leaves[ptr as usize + 1].element_index;
 
                     return Some(start..end);
                 }
                 Expanded::Aabb(..) => {
                     let left = child_left(context.idx);
+
                     let node = unsafe { self.get_node(left) };
-                    let node = node.into_expanded();
-                    if let Some(node) = new_node(left, node) {
-                        heap.push(node).unwrap();
+
+                    if let Some(node) = node.into_expanded() {
+                        if let Some(node) = new_node(left, node) {
+                            heap.push(node).unwrap();
+                        }
                     }
 
                     let right = child_right(context.idx);
                     let node = unsafe { self.get_node(right) };
-                    let node = node.into_expanded();
-                    if let Some(node) = new_node(right, node) {
-                        heap.push(node).unwrap();
+                    if let Some(node) = node.into_expanded() {
+                        if let Some(node) = new_node(right, node) {
+                            heap.push(node).unwrap();
+                        }
                     }
                 }
             }
@@ -210,15 +234,15 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
             let node = unsafe { self.get_node(idx) };
 
             match node.into_expanded() {
-                Expanded::Leaf(leaf) => {
+                Some(Expanded::Leaf(leaf)) => {
                     if !query.contains_point(leaf.point) {
                         continue;
                     }
 
                     let ptr = leaf.ptr;
 
-                    let start = self.leafs[ptr as usize].element_index;
-                    let end = self.leafs[ptr as usize + 1].element_index;
+                    let start = unsafe { self.leaves.get_unchecked(ptr as usize) }.element_index;
+                    let end = unsafe { self.leaves.get_unchecked(ptr as usize + 1) }.element_index;
 
                     let last = unsafe { to_send_indices.last_mut().unwrap_unchecked() };
 
@@ -229,7 +253,7 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
                         to_send_indices.push(start..end);
                     }
                 }
-                Expanded::Aabb(aabb) => {
+                Some(Expanded::Aabb(aabb)) => {
                     if !aabb.intersects(query) {
                         continue;
                     }
@@ -243,10 +267,14 @@ impl<L: Len, A: Allocator> Bvh<L, A> {
                     // if we do not do this in the right order dfs_stack will be in the wrong order
                     dfs_stack.push(left);
                 }
+                None => {}
             }
         }
 
-        // todo: we should probably remove 0..0 if it still exists
+        if unsafe { to_send_indices.get_unchecked(0) }.end == 0 {
+            // todo: more efficient?
+            to_send_indices.remove(0);
+        }
 
         to_send_indices
     }

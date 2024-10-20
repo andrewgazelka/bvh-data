@@ -69,9 +69,7 @@ fn test_build_bvh_with_local_player() {
         },
     ];
 
-    let size_hint = input.len();
-
-    let bvh = Bvh::build(input, size_hint);
+    let bvh = Bvh::build(input);
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 4);
@@ -81,16 +79,17 @@ fn test_build_bvh_with_local_player() {
 
     // Print it out
     let s = bvh.print();
+    
+    println!("{s}");
 
     let expected = r"
 01	Internal([0, 0] -> [3, 3])
 03	  Internal([2, 2] -> [3, 3])
-07	    Leaf([3, 3] -> 3)
-06	    Leaf([2, 2] -> 2)
+07	    Leaf([3, 3] => [4])
+06	    Leaf([2, 2] => [3])
 02	  Internal([0, 0] -> [1, 1])
-05	    Leaf([1, 1] -> 1)
-04	    Leaf([0, 0] -> 0)
-    "
+05	    Leaf([1, 1] => [2])
+04	    Leaf([0, 0] => [1])    "
     .trim();
 
     assert_eq!(s, expected);
@@ -104,9 +103,7 @@ fn test_query_single_player() {
     };
 
     let input = vec![player];
-    let size_hint = input.len();
-
-    let bvh = Bvh::build(input, size_hint);
+    let bvh = Bvh::build(input);
 
     // Query the exact location of the player
     let query = Aabb::new(I16Vec2::new(1, 2), I16Vec2::new(1, 2));
@@ -116,7 +113,7 @@ fn test_query_single_player() {
     // Query a location that doesn't intersect with the player
     let query = Aabb::new(I16Vec2::new(10, 10), I16Vec2::new(10, 10));
     let result: Vec<_> = bvh.get_in(query).into_iter().collect();
-    assert_eq!(result, vec![0..0]);
+    assert_eq!(result, vec![]);
 }
 
 #[test]
@@ -154,9 +151,7 @@ fn test_query_multiple_players() {
         },
     ];
 
-    let size_hint = input.len();
-
-    let bvh = Bvh::build(input, size_hint);
+    let bvh = Bvh::build(input);
 
     // Query a location that intersects with multiple players
     let query = Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(2, 2));
@@ -166,12 +161,12 @@ fn test_query_multiple_players() {
     // Query a location that intersects with a single player
     let query = Aabb::new(I16Vec2::new(3, 3), I16Vec2::new(3, 3));
     let result: Vec<_> = bvh.get_in(query).into_iter().collect();
-    assert_eq!(result, vec![0..0, 3..4]);
+    assert_eq!(result, vec![3..4]);
 
     // Query a location that doesn't intersect with any players
     let query = Aabb::new(I16Vec2::new(10, 10), I16Vec2::new(10, 10));
     let result: Vec<_> = bvh.get_in(query).into_iter().collect();
-    assert_eq!(result, vec![0..0]);
+    assert_eq!(result, vec![]);
 }
 
 #[test]
@@ -199,9 +194,7 @@ fn test_build_bvh_with_odd_number_of_players() {
         },
     ];
 
-    let size_hint = input.len();
-
-    let bvh = Bvh::build(input, size_hint);
+    let bvh = Bvh::build(input);
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 5);
@@ -214,14 +207,14 @@ fn test_build_bvh_with_odd_number_of_players() {
 
     let expected = r"
 01	Internal([0, 0] -> [4, 4])
-03	  Leaf([4, 4] -> 4)
+03	  Leaf([4, 4] => [5])
 02	  Internal([0, 0] -> [3, 3])
 05	    Internal([2, 2] -> [3, 3])
-11	      Leaf([3, 3] -> 3)
-10	      Leaf([2, 2] -> 2)
+11	      Leaf([3, 3] => [4])
+10	      Leaf([2, 2] => [3])
 04	    Internal([0, 0] -> [1, 1])
-09	      Leaf([1, 1] -> 1)
-08	      Leaf([0, 0] -> 0)
+09	      Leaf([1, 1] => [2])
+08	      Leaf([0, 0] => [1])
     "
     .trim();
 
@@ -242,9 +235,7 @@ fn test_fuzz() {
             })
             .collect();
 
-        let size_hint = elems.len();
-
-        let bvh = Bvh::build(elems.clone(), size_hint);
+        let bvh = Bvh::build(elems.clone());
 
         assert_eq!(bvh.elements().len(), elems.len());
 
@@ -308,7 +299,7 @@ fn test_closest_player() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::build(input, size_hint);
+    let bvh = Bvh::build(input);
 
     //     assert_eq!(
     //         bvh.print(),
@@ -325,6 +316,9 @@ fn test_closest_player() {
     //     "
     //         .trim()
     //     );
+
+    let p = bvh.print();
+    println!("{p}");
 
     let result = bvh.get_closest_slice(I16Vec2::new(2, 2)).unwrap();
     assert_eq!(result, &[3]); // id 2
@@ -361,7 +355,7 @@ fn test_build_bvh_with_non_power_of_2_players() {
 
     let size_hint = input.len();
 
-    let bvh = Bvh::build(input, size_hint);
+    let bvh = Bvh::build(input);
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 6);
@@ -375,15 +369,16 @@ fn test_build_bvh_with_non_power_of_2_players() {
     let expected = r"
 01	Internal([0, 0] -> [5, 5])
 03	  Internal([4, 4] -> [5, 5])
-07	    Leaf([5, 5] -> 5)
-06	    Leaf([4, 4] -> 4)
+06	    Internal([4, 4] -> [5, 5])
+13	      Leaf([5, 5] => [6])
+12	      Leaf([4, 4] => [5])
 02	  Internal([0, 0] -> [3, 3])
 05	    Internal([2, 2] -> [3, 3])
-11	      Leaf([3, 3] -> 3)
-10	      Leaf([2, 2] -> 2)
+11	      Leaf([3, 3] => [4])
+10	      Leaf([2, 2] => [3])
 04	    Internal([0, 0] -> [1, 1])
-09	      Leaf([1, 1] -> 1)
-08	      Leaf([0, 0] -> 0)
+09	      Leaf([1, 1] => [2])
+08	      Leaf([0, 0] => [1])
     "
     .trim();
 

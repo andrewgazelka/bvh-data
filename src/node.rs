@@ -23,17 +23,42 @@ pub union Node {
 impl Debug for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let one = unsafe { self.one };
-        f.write_fmt(format_args!("0x{one:X}"))
+        f.write_fmt(format_args!("0x{one:X}..."))?;
+        let expanded = self.into_expanded();
+        f.write_fmt(format_args!("{expanded:?}"))
     }
 }
 
 const _: () = assert!(std::mem::size_of::<Aabb>() == std::mem::size_of::<i64>());
 const _: () = assert!(std::mem::size_of::<Node>() == std::mem::size_of::<i64>());
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LeafPtr {
     pub point: glam::I16Vec2,
     pub ptr: u32,
+}
+
+impl From<LeafPtr> for Node {
+    fn from(value: LeafPtr) -> Self {
+        Self::leaf(value.point, value.ptr)
+    }
+}
+
+impl LeafPtr {
+    #[must_use]
+    pub const fn is_invalid(&self) -> bool {
+        self.ptr == u32::MAX >> 2
+    }
+
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
+        !self.is_invalid()
+    }
+
+    pub const INVALID: Self = Self {
+        point: glam::I16Vec2::new(0, 0),
+        ptr: u32::MAX >> 2,
+    };
 }
 
 impl Display for LeafPtr {
@@ -42,9 +67,16 @@ impl Display for LeafPtr {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Leaf {
     pub element_index: u32,
+}
+
+impl Leaf {
+    #[must_use]
+    pub const fn new(element_index: u32) -> Self {
+        Self { element_index }
+    }
 }
 
 const MSB_1_MASK: u32 = 0x8000_0000;
@@ -59,6 +91,7 @@ impl Node {
     // todo: we might be able to only need one index and just look at the next leaf node to determine the
     // range but this might be a bit more complicated.
     // Also it might be needed if we can store two indexes easily.
+    #[must_use]
     pub const fn leaf_element_indices(self) -> Option<LeafPtr> {
         let as_two = unsafe { self.two };
 
@@ -100,11 +133,12 @@ impl Node {
         }
     }
 
-    pub const fn into_expanded(self) -> Expanded {
-        if let Some(leaf) = self.leaf_element_indices() {
-            return Expanded::Leaf(leaf);
-        }
-        Expanded::Aabb(unsafe { self.aabb })
+    #[must_use]
+    pub fn into_expanded(self) -> Option<Expanded> {
+        self.leaf_element_indices()
+            .map_or(Some(Expanded::Aabb(unsafe { self.aabb })), |leaf| {
+                leaf.is_valid().then_some(Expanded::Leaf(leaf))
+            })
     }
 
     #[allow(
@@ -112,6 +146,7 @@ impl Node {
         clippy::cast_lossless,
         clippy::cast_sign_loss
     )]
+    #[must_use]
     pub fn leaf(point: glam::I16Vec2, start: u32) -> Self {
         // make sure start is at most u30::MAX = 2^30 - 1 = 0x3FFFFFFF
         debug_assert!(
@@ -131,12 +166,19 @@ impl Node {
         }
     }
 
-    pub const fn aabb(aabb: Aabb) -> Self {
-        // assert that min <= max
-        debug_assert!(aabb.min.x <= aabb.max.x);
+    #[must_use]
+    pub fn aabb(aabb: Aabb) -> Self {
+        let result = Self { aabb };
 
-        // technically this is not needed
-        debug_assert!(aabb.min.y <= aabb.max.y);
+        let msb_left = unsafe { result.two }.left >> 31;
+        let msb_right = unsafe { result.two }.right >> 31;
+
+        if aabb != Aabb::INVALID {
+            debug_assert!(
+                msb_left == 1 || msb_right == 0,
+                "created with invalid AABB {aabb:?}"
+            );
+        }
 
         Self { aabb }
     }
@@ -165,7 +207,7 @@ mod tests {
     #[test]
     fn test_into_expanded_leaf() {
         let node = Node::leaf(I16Vec2::new(1, 2), 10);
-        let expanded = node.into_expanded();
+        let expanded = node.into_expanded().expect("node to be valid");
         match expanded {
             Expanded::Leaf(leaf) => {
                 assert_eq!(leaf.point, I16Vec2::new(1, 2));
@@ -181,7 +223,7 @@ mod tests {
     fn test_into_expanded_aabb() {
         let aabb = Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(1, 1));
         let node = Node { aabb };
-        let expanded = node.into_expanded();
+        let expanded = node.into_expanded().expect("node to be valid");
         match expanded {
             Expanded::Aabb(aabb) => {
                 assert_eq!(aabb.min, I16Vec2::new(0, 0));
@@ -234,12 +276,14 @@ mod tests {
         assert_eq!(indices.ptr, 0x3FFF_FFFF);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "ptr must be at most u30::MAX (0x3FFF_FFFF)")]
     fn test_leaf_start_overflow() {
         Node::leaf(I16Vec2::new(0, 0), 0x4000_0000);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "ptr must be at most u30::MAX (0x3FFF_FFFF)")]
     fn test_leaf_start_overflow_2() {
