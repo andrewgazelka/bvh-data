@@ -74,8 +74,11 @@ impl Point for &glam::I16Vec2 {
 
 pub trait Data {
     type Unit;
-    type Context: Copy = ();
-    fn data(&self, context: Self::Context) -> &[Self::Unit];
+    type Context<'a>: Copy
+        = ()
+    where
+        Self: 'a;
+    fn data(&self, context: Self::Context<'_>) -> &[Self::Unit];
 }
 
 mod sealed {
@@ -88,7 +91,7 @@ impl<T> sealed::PointWithData for T where T: Point + Data {}
 
 impl<T> Bvh<Vec<T>> {
     #[must_use]
-    pub fn build<I>(input: Vec<I>, context: I::Context) -> Self
+    pub fn build<I>(input: Vec<I>, context: I::Context<'_>) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
@@ -105,7 +108,7 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::too_many_lines)]
-    pub fn build_in<I>(mut input: Vec<I>, alloc: A, context: I::Context) -> Self
+    pub fn build_in<I>(mut input: Vec<I>, alloc: A, context: I::Context<'_>) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
@@ -292,7 +295,7 @@ pub const ROOT_IDX: u32 = 1;
 fn process_input<I, T, A>(
     input: Vec<I>,
     alloc: A,
-    context: I::Context,
+    context: I::Context<'_>,
 ) -> (Vec<T, A>, Vec<Leaf, A>, Vec<glam::I16Vec2, A>)
 where
     I: PointWithData<Unit = T>,
@@ -359,7 +362,7 @@ mod tests {
     impl Data for TestPoint {
         type Unit = u8;
 
-        fn data(&self, _context: Self::Context) -> &[Self::Unit] {
+        fn data(&self, _context: Self::Context<'_>) -> &[Self::Unit] {
             &self.data
         }
     }

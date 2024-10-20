@@ -35,7 +35,7 @@ impl Point for ChunkWithPackets<'_> {
 impl Data for ChunkWithPackets<'_> {
     type Unit = u8;
 
-    fn data(&self, _context: Self::Context) -> &[u8] {
+    fn data(&self, _context: ()) -> &[u8] {
         &self.packets_data
     }
 }
