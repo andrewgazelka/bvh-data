@@ -91,7 +91,7 @@ impl<T> sealed::PointWithData for T where T: Point + Data {}
 
 impl<T> Bvh<Vec<T>> {
     #[must_use]
-    pub fn build<I>(input: Vec<I>, context: I::Context<'_>) -> Self
+    pub fn build<I>(input: &mut [I], context: I::Context<'_>) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
@@ -108,7 +108,7 @@ impl<T, A: Allocator + Clone> Bvh<Vec<T, A>, A> {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::too_many_lines)]
-    pub fn build_in<I>(mut input: Vec<I>, alloc: A, context: I::Context<'_>) -> Self
+    pub fn build_in<I>(input: &mut [I], alloc: A, context: I::Context<'_>) -> Self
     where
         I: PointWithData<Unit = T>,
         T: Copy + 'static,
@@ -293,7 +293,7 @@ pub const fn sibling_right(idx: u32) -> Option<NonZeroU32> {
 pub const ROOT_IDX: u32 = 1;
 
 fn process_input<I, T, A>(
-    input: Vec<I>,
+    input: &[I],
     alloc: A,
     context: I::Context<'_>,
 ) -> (Vec<T, A>, Vec<Leaf, A>, Vec<glam::I16Vec2, A>)
@@ -393,7 +393,7 @@ mod tests {
             },
         ];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
+        let (result_data, indices, points) = process_input(&input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         assert_eq!(indices, vec![Leaf::new(0), Leaf::new(4), Leaf::new(6)]);
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn test_process_input_empty() {
         let input: Vec<TestPoint> = vec![];
-        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
+        let (result_data, indices, points) = process_input(&input, std::alloc::Global, ());
 
         assert!(result_data.is_empty());
         assert!(indices.is_empty());
@@ -420,7 +420,7 @@ mod tests {
             data: vec![42, 43],
         }];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
+        let (result_data, indices, points) = process_input(&input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![42, 43]);
         assert_eq!(indices, vec![Leaf::new(0)]);
@@ -444,7 +444,7 @@ mod tests {
             },
         ];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
+        let (result_data, indices, points) = process_input(&input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![1, 2, 3]);
         assert_eq!(indices, vec![Leaf::new(0), Leaf::new(1), Leaf::new(2)]);
@@ -471,7 +471,7 @@ mod tests {
             },
         ];
 
-        let (result_data, indices, points) = process_input(input, std::alloc::Global, ());
+        let (result_data, indices, points) = process_input(&input, std::alloc::Global, ());
 
         assert_eq!(result_data, vec![1, 2, 3]);
         assert_eq!(indices, vec![Leaf::new(0), Leaf::new(2)]);

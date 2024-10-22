@@ -50,7 +50,7 @@ fn test_local_player() {
 
 #[test]
 fn test_build_bvh_with_local_player() {
-    let input = vec![
+    let mut input = vec![
         Player {
             location: I16Vec2::new(0, 0),
             id: 1,
@@ -69,7 +69,7 @@ fn test_build_bvh_with_local_player() {
         },
     ];
 
-    let bvh = Bvh::build(input, ());
+    let bvh = Bvh::build(&mut input, ());
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 4);
@@ -102,8 +102,8 @@ fn test_query_single_player() {
         id: 123,
     };
 
-    let input = vec![player];
-    let bvh = Bvh::build(input, ());
+    let mut input = vec![player];
+    let bvh = Bvh::build(&mut input, ());
 
     // Query the exact location of the player
     let query = Aabb::new(I16Vec2::new(1, 2), I16Vec2::new(1, 2));
@@ -132,7 +132,7 @@ fn test_query_multiple_players() {
     //
     //
 
-    let input = vec![
+    let mut input = vec![
         Player {
             location: I16Vec2::new(0, 0),
             id: 1,
@@ -151,7 +151,7 @@ fn test_query_multiple_players() {
         },
     ];
 
-    let bvh = Bvh::build(input, ());
+    let bvh = Bvh::build(&mut input, ());
 
     // Query a location that intersects with multiple players
     let query = Aabb::new(I16Vec2::new(0, 0), I16Vec2::new(2, 2));
@@ -171,7 +171,7 @@ fn test_query_multiple_players() {
 
 #[test]
 fn test_build_bvh_with_odd_number_of_players() {
-    let input = vec![
+    let mut input = vec![
         Player {
             location: I16Vec2::new(0, 0),
             id: 1,
@@ -194,7 +194,7 @@ fn test_build_bvh_with_odd_number_of_players() {
         },
     ];
 
-    let bvh = Bvh::build(input, ());
+    let bvh = Bvh::build(&mut input, ());
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 5);
@@ -228,14 +228,14 @@ fn test_fuzz() {
     for _ in 0..10 {
         let num_elems = fastrand::u32(..100);
 
-        let elems: Vec<_> = (0..num_elems)
+        let mut elems: Vec<_> = (0..num_elems)
             .map(|id| Player {
                 location: I16Vec2::new(fastrand::i16(-200..200), fastrand::i16(-200..200)),
                 id,
             })
             .collect();
 
-        let bvh = Bvh::build(elems.clone(), ());
+        let bvh = Bvh::build(&mut elems, ());
 
         assert_eq!(bvh.elements().len(), elems.len());
 
@@ -271,7 +271,7 @@ fn test_fuzz() {
 
 #[test]
 fn test_closest_player() {
-    let input = vec![
+    let mut input = vec![
         Player {
             location: I16Vec2::new(0, 0),
             id: 1,
@@ -294,7 +294,7 @@ fn test_closest_player() {
         },
     ];
 
-    let bvh = Bvh::build(input, ());
+    let bvh = Bvh::build(&mut input, ());
 
     //     assert_eq!(
     //         bvh.print(),
@@ -321,7 +321,7 @@ fn test_closest_player() {
 
 #[test]
 fn test_build_bvh_with_non_power_of_2_players() {
-    let input = vec![
+    let mut input = vec![
         Player {
             location: I16Vec2::new(0, 0),
             id: 1,
@@ -348,7 +348,7 @@ fn test_build_bvh_with_non_power_of_2_players() {
         },
     ];
 
-    let bvh = Bvh::build(input, ());
+    let bvh = Bvh::build(&mut input, ());
 
     // Check the number of elements in the BVH
     assert_eq!(bvh.elements().len(), 6);
