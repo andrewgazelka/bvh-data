@@ -26,6 +26,20 @@ pub struct Bvh<L, A: Allocator = Global> {
     leaves: Vec<Leaf, A>,
 }
 
+impl <L, A: Allocator> Bvh<L, A> {
+    pub fn into_inner(self) -> (Vec<Leaf, A>, L) {
+        (self.leaves, self.data)
+    }
+
+    pub fn inner(&self) -> (&Vec<Leaf, A>, &L) {
+        (&self.leaves, &self.data)
+    }
+
+    pub fn inner_mut(&mut self) -> (&mut Vec<Leaf, A>, &mut L) {
+        (&mut self.leaves, &mut self.data)
+    }
+}
+
 impl<T: Debug, A: Allocator> Debug for Bvh<Vec<T, A>, A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.print())
